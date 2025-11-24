@@ -27,3 +27,20 @@ export async function parseWithAI(text) {
     throw error;
   }
 }
+
+// 폴백 함수 추가 (pdfParser.js에서 사용)
+export async function parseWithFallback(text, fallbackParser) {
+  try {
+    // AI 파싱 시도
+    return await parseWithAI(text);
+  } catch (error) {
+    console.warn('⚠️ AI 파싱 실패, 정규식 파싱으로 폴백:', error.message);
+    
+    // 정규식 파싱으로 폴백
+    if (fallbackParser) {
+      return fallbackParser(text);
+    }
+    
+    throw error;
+  }
+}
