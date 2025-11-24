@@ -5,7 +5,7 @@ import { parseWithFallback } from './aiParser';
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 // AI 파싱 사용 여부 (환경 변수로 제어)
-const USE_AI_PARSING = import.meta.env.VITE_USE_AI_PARSING === 'true';
+
 
 /**
  * PDF 파일을 파싱하여 보험 데이터 추출
@@ -70,16 +70,13 @@ export async function parsePDF(file) {
   console.log('📄 PDF 텍스트 추출 완료 (총 ' + pdf.numPages + '페이지)');
   console.log('첫 500자:', fullText.substring(0, 500));
 
-  // 데이터 파싱 (AI 또는 정규식)
-  let parsedData;
+  // 데이터 파싱 (AI 파싱 → 실패 시 정규식 폴백)
+  console.log('🤖 AI 파싱 시도');
   
-  if (USE_AI_PARSING) {
-    console.log('🤖 AI 파싱 모드 활성화');
-    parsedData = await parseWithFallback(fullText, (text) => parseInsuranceData(text, structuredPages));
-  } else {
-    console.log('🔧 정규식 파싱 모드');
-    parsedData = parseInsuranceData(fullText, structuredPages);
-  }
+  const parsedData = await parseWithFallback(
+    fullText, 
+    (text) => parseInsuranceData(text, structuredPages)
+  );
   
   return parsedData;
 }
