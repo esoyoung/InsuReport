@@ -10,17 +10,28 @@ function ReportViewer() {
 
   if (!parsedData) return null;
 
+  // 안전 장치: 고객정보가 없으면 렌더링하지 않음
+  if (!parsedData.고객정보) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500">데이터를 불러오는 중입니다...</p>
+      </div>
+    );
+  }
+
+  const { 고객정보 } = parsedData;
+
   return (
     <div>
       {/* 컨트롤 패널 */}
       <div className="mb-6 flex justify-between items-center no-print">
         <div>
           <h2 className="text-xl font-bold text-gray-900">
-            {parsedData.customerInfo.name}님의 보장분석 리포트
+            {고객정보.이름}님의 보장분석 리포트
           </h2>
           <p className="text-sm text-gray-600 mt-1">
-            {parsedData.customerInfo.age}세 · {parsedData.customerInfo.gender} · 
-            월 보험료: {parsedData.customerInfo.monthlyPremium.toLocaleString()}원
+            {고객정보.나이}세 · {고객정보.성별} · 
+            월 보험료: {(고객정보.월보험료 || 0).toLocaleString()}원
           </p>
         </div>
         <button

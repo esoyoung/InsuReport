@@ -1,8 +1,7 @@
 import React from 'react';
-import { useInsuranceStore } from '../../store/insuranceStore';
 
-export default function DiagnosisTable() {
-  const insuranceData = useInsuranceStore((state) => state.insuranceData);
+export default function DiagnosisTable({ data }) {
+  const insuranceData = data;
 
   // 안전 장치 추가
   if (!insuranceData || !insuranceData.진단현황) {

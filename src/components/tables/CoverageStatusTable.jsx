@@ -1,8 +1,7 @@
 import React from 'react';
-import { useInsuranceStore } from '../../store/insuranceStore';
 
-export default function CoverageStatusTable() {
-  const insuranceData = useInsuranceStore((state) => state.insuranceData);
+export default function CoverageStatusTable({ data }) {
+  const insuranceData = data;
 
   // 안전 장치 추가
   if (!insuranceData || !insuranceData.담보현황) {
