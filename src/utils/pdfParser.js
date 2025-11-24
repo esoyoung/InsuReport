@@ -122,74 +122,57 @@ function parseInsuranceData(text, structuredPages) {
     contracts,
     coverages,
     diagnosis,
-    rawText: text // 디버깅용
+    rawText: text
   };
 }
 
 /**
- * 고객 정보 추출
+ * 고객 정보 추출 (개선 v2)
  */
 function extractCustomerInfo(text, structuredPages) {
-  // 패턴 1: "강민재님의 전체 보험계약 개요"
-  let nameMatch = text.match(/([가-힣]+)님의\s*전체\s*보험계약/);
+  // 패턴: "강민재 (32세 ,여자)   님의 전체 보장현황"
+  const nameMatch = text.match(/([가-힣]{2,4})\s*[\(（]\s*(\d+)세\s*[,，]\s*(남자|여자)\s*[\)）]\s*님의\s*전체/);
   
-  // 패턴 2: "안영균 (61세 ,남자)" 형태
-  if (!nameMatch) {
-    nameMatch = text.match(/([가-힣]{2,4})\s*[\(（]\s*(\d+)세\s*[,，]\s*(남자|여자)\s*[\)）]/);
-    if (nameMatch) {
-      const ageGenderMatch = nameMatch;
-      const name = nameMatch[1];
-      const age = parseInt(nameMatch[2]);
-      const gender = nameMatch[3];
-      
-      // 월 보험료 추출
-      const premiumMatch = text.match(/월\s*납입\s*보험료\s*([\d,]+)\s*원/) ||
-                          text.match(/합계.*?([\d,]+)\s*원/);
-      
-      // 계약 수
-      const contractCountMatch = text.match(/총\s*계약수\s*(\d+)\s*건/) ||
-                                text.match(/(\d+)\s*건.*?원/);
-      
-      return {
-        name: name,
-        age: age,
-        gender: gender,
-        contractCount: contractCountMatch ? parseInt(contractCountMatch[1]) : 0,
-        monthlyPremium: premiumMatch ? parseInt(premiumMatch[1].replace(/,/g, '')) : 0,
-        reportDate: new Date().toISOString().split('T')[0]
-      };
-    }
+  if (nameMatch) {
+    const name = nameMatch[1];
+    const age = parseInt(nameMatch[2]);
+    const gender = nameMatch[3];
+    
+    // 계약 수와 월 보험료 찾기 (같은 페이지)
+    // 패턴: " 3  153,500" (계약수  월보험료)
+    const statsMatch = text.match(/\s(\d+)\s+([\d,]+)\s+0\s+0\s+0\s+\1/);
+    
+    return {
+      name: name,
+      age: age,
+      gender: gender,
+      contractCount: statsMatch ? parseInt(statsMatch[1]) : 0,
+      monthlyPremium: statsMatch ? parseInt(statsMatch[2].replace(/,/g, '')) : 0,
+      reportDate: new Date().toISOString().split('T')[0]
+    };
   }
   
-  // 기본 패턴 처리
-  const ageGenderMatch = text.match(/(\d+)세\s*[\(（]\s*(남자|여자)\s*[\)）]/);
-  const premiumMatch = text.match(/월\s*납입\s*보험료\s*([\d,]+)\s*원/) ||
-                       text.match(/합계.*?([\d,]+)\s*원/);
-  const contractCountMatch = text.match(/총\s*계약수\s*(\d+)\s*건/);
-
-  const customerInfo = {
-    name: nameMatch ? nameMatch[1] : '알 수 없음',
-    age: ageGenderMatch ? parseInt(ageGenderMatch[1]) : 0,
-    gender: ageGenderMatch ? ageGenderMatch[2] : '알 수 없음',
-    contractCount: contractCountMatch ? parseInt(contractCountMatch[1]) : 0,
-    monthlyPremium: premiumMatch ? parseInt(premiumMatch[1].replace(/,/g, '')) : 0,
+  // 폴백 패턴
+  return {
+    name: '알 수 없음',
+    age: 0,
+    gender: '알 수 없음',
+    contractCount: 0,
+    monthlyPremium: 0,
     reportDate: new Date().toISOString().split('T')[0]
   };
-
-  console.log('👤 고객 정보:', customerInfo);
-  return customerInfo;
 }
 
 /**
- * 계약 리스트 추출 (개선)
+ * 계약 리스트 추출 (개선 v2)
  */
 function extractContracts(text, structuredPages) {
   const contracts = [];
   
-  // "전체 계약 리스트" 페이지 찾기
+  // "전체 계약리스트" 페이지 찾기
   const contractPage = structuredPages.find(page => 
-    page.text.includes('전체 계약 리스트') || 
-    page.text.includes('가입하신 모든 보험상품')
+    page.text.includes('전체 계약리스트') || 
+    page.text.includes('전체 계약 리스트')
   );
   
   if (!contractPage) {
@@ -197,114 +180,41 @@ function extractContracts(text, structuredPages) {
     return [];
   }
 
+  console.log('📋 계약 페이지 발견:', contractPage.pageNumber);
+  
+  // 패턴: 번호  보험사  상품명  가입일  납입방식  납입기간  만기  보험료
+  // 예: 1   새마을금고중앙회   無MG나를위한여성암공제Ⅳ(만기환급형)   2018-09-04   월납   25년   80세   73,960 원
+  
   const lines = contractPage.lines;
-  let currentContract = null;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     
-    // 숫자로 시작하는 행 (계약 번호)
-    const noMatch = line.match(/^(\d+)\s+/);
-    if (noMatch && parseInt(noMatch[1]) <= 20) { // 계약 번호는 보통 20 이하
-      if (currentContract && currentContract.company) {
-        contracts.push(currentContract);
-      }
+    // 번호로 시작하는 계약 행 매칭
+    const match = line.match(/^(\d+)\s+(.+?)\s+(無.+?)\s+(\d{4}-\d{2}-\d{2})\s+(월납|년납)\s+(\d+년)\s+(\d+세|종신)\s+([\d,]+)\s*원/);
+    
+    if (match) {
+      contracts.push({
+        no: parseInt(match[1]),
+        company: match[2].trim(),
+        productName: match[3].trim(),
+        startDate: match[4],
+        paymentType: match[5],
+        paymentPeriod: match[6],
+        maturityAge: match[7],
+        premium: parseInt(match[8].replace(/,/g, ''))
+      });
       
-      currentContract = {
-        no: parseInt(noMatch[1]),
-        company: '',
-        productName: '',
-        startDate: '',
-        paymentType: '',
-        paymentPeriod: '',
-        maturityAge: '',
-        premium: 0
-      };
-      
-      // 같은 행에 보험사명이 있을 수 있음
-      const restLine = line.substring(noMatch[0].length);
-      if (restLine.length > 2) {
-        // 보험사명 추출
-        const companyMatch = restLine.match(/^([가-힣A-Za-z]+)/);
-        if (companyMatch) {
-          currentContract.company = companyMatch[1];
-        }
-      }
-      continue;
+      console.log(`  ✓ 계약 ${match[1]}: ${match[2]} - ${match[3]}`);
     }
-    
-    if (!currentContract) continue;
-    
-    // 보험사명 (화재, 생명, 손해보험 등)
-    if (!currentContract.company && (
-      line.includes('화재') || 
-      line.includes('생명') || 
-      line.includes('손해보험') ||
-      line.includes('우정사업')
-    )) {
-      currentContract.company = line.split(/\s+/)[0];
-    }
-    
-    // 상품명 (무배당, (무) 등으로 시작)
-    if (!currentContract.productName && (
-      line.includes('무배당') || 
-      line.includes('(무)') ||
-      line.includes('보험')
-    )) {
-      // 숫자나 날짜 이전까지가 상품명
-      const productMatch = line.match(/^([가-힣\sA-Za-z\(\)]+?)(?:\d{4}|\d{1,3},\d{3})/);
-      if (productMatch) {
-        currentContract.productName = productMatch[1].trim();
-      } else {
-        currentContract.productName = line.trim();
-      }
-    }
-    
-    // 가입일 (2005.05.11, 2019-02-21 형태)
-    const dateMatch = line.match(/(\d{4})[\.\-\/](\d{1,2})[\.\-\/](\d{1,2})/);
-    if (dateMatch && !currentContract.startDate) {
-      currentContract.startDate = `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`;
-    }
-    
-    // 납입방식
-    if (line.includes('월납') || line.includes('년납')) {
-      currentContract.paymentType = line.includes('월납') ? '월납' : '년납';
-    }
-    
-    // 납입기간 (20년, 10년)
-    const periodMatch = line.match(/(\d+)\s*년\s*납/) || line.match(/(\d+)\s*년(?!세)/);
-    if (periodMatch && !currentContract.paymentPeriod) {
-      currentContract.paymentPeriod = `${periodMatch[1]}년`;
-    }
-    
-    // 만기 (74세, 80세, 종신)
-    const maturityMatch = line.match(/(\d+)\s*세\s*만기/) || line.match(/만기\s*(\d+)\s*세/) || line.match(/(종신)/);
-    if (maturityMatch && !currentContract.maturityAge) {
-      currentContract.maturityAge = maturityMatch[1] + (maturityMatch[1] !== '종신' ? '세' : '');
-    }
-    
-    // 월 보험료 (60,590 원)
-    const premiumMatch = line.match(/([\d,]+)\s*원/);
-    if (premiumMatch && currentContract.premium === 0) {
-      const amount = parseInt(premiumMatch[1].replace(/,/g, ''));
-      // 합리적인 금액 범위 (1,000원 ~ 1,000,000원)
-      if (amount >= 1000 && amount <= 1000000) {
-        currentContract.premium = amount;
-      }
-    }
-  }
-  
-  // 마지막 계약 추가
-  if (currentContract && currentContract.company) {
-    contracts.push(currentContract);
   }
 
-  console.log('📋 계약 리스트:', contracts);
+  console.log(`📋 계약 리스트: ${contracts.length}개 추출`);
   return contracts;
 }
 
 /**
- * 담보 현황 추출
+ * 담보 현황 추출 (개선 v2)
  */
 function extractCoverages(text, structuredPages) {
   const coverageTypes = [
@@ -327,10 +237,9 @@ function extractCoverages(text, structuredPages) {
 
   const coverages = [];
 
-  // "담보별 현황" 페이지 찾기
+  // "전체 보장현황" 페이지 찾기
   const coveragePage = structuredPages.find(page => 
-    page.text.includes('담보별 현황') || 
-    page.text.includes('보장항목별')
+    page.text.includes('전체 보장현황')
   );
   
   if (!coveragePage) {
@@ -338,17 +247,19 @@ function extractCoverages(text, structuredPages) {
     return coverages;
   }
 
+  console.log('🛡️ 담보 페이지 발견:', coveragePage.pageNumber);
+
   coverageTypes.forEach(type => {
-    // 정규식으로 담보명 + 금액 추출
-    const regex = new RegExp(`${type.name}\\s+([\\d,]+)\\s*만`, 'i');
+    // 패턴: "상해사망   1,500만" 형태 찾기
+    const regex = new RegExp(`${type.name}\\s+([\\d,]+만|0)`, 'i');
     const match = coveragePage.text.match(regex);
     
     let current = 0;
     let recommended = 0;
     
-    if (match) {
-      current = parseInt(match[1].replace(/,/g, ''));
-      recommended = current; // 기본적으로 현재값과 동일
+    if (match && match[1] !== '0') {
+      current = parseAmount(match[1]);
+      recommended = current;
     }
 
     coverages.push({
@@ -358,56 +269,59 @@ function extractCoverages(text, structuredPages) {
     });
   });
 
-  console.log('🛡️ 담보 현황:', coverages.length, '개 항목');
+  console.log(`🛡️ 담보 현황: ${coverages.length}개 항목`);
   return coverages;
 }
 
 /**
- * 진단 현황 추출
+ * 진단 현황 추출 (개선 v2)
  */
 function extractDiagnosis(text, structuredPages) {
   const diagnosis = [];
   
-  // "담보별 진단현황" 페이지들 찾기
-  const diagnosisPages = structuredPages.filter(page => 
-    page.text.includes('진단현황') || 
-    page.text.includes('부족') || 
-    page.text.includes('충분') ||
-    page.text.includes('미가입')
+  // "전체 담보 진단 현황" 페이지 찾기
+  const diagnosisPage = structuredPages.find(page => 
+    page.text.includes('전체 담보 진단 현황')
   );
   
-  if (diagnosisPages.length === 0) {
+  if (!diagnosisPage) {
     console.warn('⚠️ 담보별 진단현황 페이지를 찾을 수 없습니다');
     return diagnosis;
   }
 
-  diagnosisPages.forEach(page => {
-    const lines = page.lines;
+  console.log('📊 진단 페이지 발견:', diagnosisPage.pageNumber);
+  
+  const lines = diagnosisPage.lines;
+  
+  // 패턴: 담보명   권장금액   가입금액   차이   상태
+  // 예:  상해사망   2억   1,500만   -1억 8,500만   부족
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
     
-    lines.forEach(line => {
-      // 권장/가입/상태 패턴 찾기
-      // 예: "운전자/기타 벌금(대인/스쿨존/대물) 권장 3,000만 가입 3,500만 충분 +500만"
-      const match = line.match(/([가-힣\/\(\)]+)\s+권장\s+([\d,]+만?)\s+가입\s+([\d,]+만?|0)\s+(충분|부족|미가입)\s*([+-]?[\d,]+만?)?/);
+    // 진단 행 매칭
+    const match = line.match(/^([가-힣0-9\/\(\)]+?)\s+([\d,억만]+)\s+([\d,억만]+|0)\s+([+-]?[\d,억만]+)\s+(충분|부족|미가입)$/);
+    
+    if (match) {
+      const coverageName = match[1].trim();
+      const recommended = parseAmount(match[2]);
+      const current = match[3] === '0' ? 0 : parseAmount(match[3]);
+      const difference = parseAmount(match[4]);
+      const status = match[5];
       
-      if (match) {
-        const coverageName = match[1].trim();
-        const recommended = parseAmount(match[2]);
-        const current = match[3] === '0' ? 0 : parseAmount(match[3]);
-        const status = match[4];
-        const difference = match[5] ? parseAmount(match[5]) : 0;
-        
-        diagnosis.push({
-          coverageName,
-          current,
-          recommended,
-          difference,
-          status
-        });
-      }
-    });
-  });
+      diagnosis.push({
+        coverageName,
+        current,
+        recommended,
+        difference,
+        status
+      });
+      
+      console.log(`  ✓ ${coverageName}: ${current}만 / ${recommended}만 (${status})`);
+    }
+  }
 
-  console.log('📊 진단 현황:', diagnosis.length, '개 항목');
+  console.log(`📊 진단 현황: ${diagnosis.length}개 항목`);
   return diagnosis;
 }
 
@@ -444,4 +358,3 @@ function parseAmount(amountStr) {
   
   return amount;
 }
-// AI 파싱 사용 여부 (환경 변수로 제어)
