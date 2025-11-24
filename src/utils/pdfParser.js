@@ -2,7 +2,7 @@
 
 /**
  * KB 보장분석 PDF 파싱 유틸리티
- * Y 좌표 기반 텍스트 추출 및 구조 분석
+ * 원본 PDF 구조 정확 분석 기반
  */
 
 // Y 좌표 기반 텍스트 추출
@@ -50,20 +50,20 @@ async function extractTextWithCoordinates(pdf) {
 
 // 고객 정보 파싱
 function parseCustomerInfo(text) {
-  // "안영균 (61세 ,남자) 님의 전체 보장현황" 패턴
-  const nameMatch = text.match(/([\w가-힣]+)\s*\((\d+)세\s*,\s*(남자|여자)\)\s*님의 전체 (?:보장현황|계약리스트)/);
+  // "안영균 (61세 ,남자) 님의 전체 보장현황" 또는 "전체 계약리스트" 패턴
+  const nameMatch = text.match(/([\w가-힣]+)\s*\((\d+)세\s*,\s*(남자|여자)\)\s*님의 전체/);
   
   if (!nameMatch) {
     console.warn('⚠️ 고객 정보를 찾을 수 없습니다');
     return null;
   }
   
-  // 계약 수 추출 - 보장현황 페이지에서 "8 0 4 3 1" 패턴 (첫 번째 숫자)
-  const contractCountMatch = text.match(/님의 전체 보장현황[\s\S]{0,100}?\n\s*(\d+)\s+\d+\s+\d+\s+\d+\s+\d+/);
+  // 계약 수 추출 - "8 0 4 3 1" 패턴에서 첫 번째 숫자
+  const contractCountMatch = text.match(/님의 전체 (?:보장현황|계약리스트)[\s\S]{0,50}?\n\s*(\d+)\s+\d+\s+\d+\s+\d+\s+\d+/);
   
-  // 월보험료 추출 - 6자리 숫자 패턴
+  // 월보험료 추출 - 6자리 숫자 (예: 427,097)
   const premiumMatches = text.match(/\d{3},\d{3}/g);
-  const premium = premiumMatches ? premiumMatches[0] : '0';
+  const premium = premiumMatches && premiumMatches.length > 0 ? premiumMatches[0] : '0';
   
   const customerInfo = {
     이름: nameMatch[1],
@@ -77,12 +77,12 @@ function parseCustomerInfo(text) {
   return customerInfo;
 }
 
-// 계약 리스트 파싱 (완전 재작성)
+// 계약 리스트 파싱 (완전 재작성 - 원본 구조 기반)
 function parseContractList(text) {
   const contracts = [];
   
   // "님의 전체 계약리스트" 섹션 찾기
-  const contractSectionMatch = text.match(/님의 전체 계약리스트([\s\S]*?)(?=--- PAGE_BREAK ---|$)/);
+  const contractSectionMatch = text.match(/님의 전체 계약리스트([\s\S]*?)(?=충청GA사업단|--- PAGE_BREAK ---|$)/);
   
   if (!contractSectionMatch) {
     console.warn('⚠️ 계약 리스트 섹션을 찾을 수 없습니다');
@@ -92,106 +92,110 @@ function parseContractList(text) {
   const sectionText = contractSectionMatch[1];
   const lines = sectionText.split('\n').map(l => l.trim()).filter(l => l);
   
-  console.log(`📋 계약 리스트 섹션 줄 수: ${lines.length}`);
+  console.log(`📋 계약 리스트 섹션 분석 시작 (${lines.length}줄)`);
   
-  let i = 0;
-  while (i < lines.length) {
+  // Step 1: 계약 기본 정보 추출 (번호, 보험사, 상품명, 날짜)
+  const contractLines = [];
+  for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     
-    // 계약 번호 패턴: "1 " 또는 "2 " (숫자 + 공백)
+    // 계약 번호로 시작하는 줄 (1, 2, 3, ...)
     const numMatch = line.match(/^(\d+)\s/);
     
-    if (numMatch && parseInt(numMatch[1]) <= 20) { // 계약 번호는 1~20 사이
-      const contractNum = numMatch[1];
+    if (numMatch && parseInt(numMatch[1]) >= 1 && parseInt(numMatch[1]) <= 20) {
+      contractLines.push(line);
+    }
+  }
+  
+  console.log(`  ✓ 계약 줄 발견: ${contractLines.length}개`);
+  
+  // Step 2: 각 계약 줄에서 정보 추출
+  for (const line of contractLines) {
+    // 패턴: "번호 보험사 상품명 날짜"
+    const parts = line.split(/\s+/);
+    const contractNum = parts[0];
+    
+    // 날짜 찾기 (YYYY-MM-DD)
+    const dateMatch = line.match(/(\d{4}-\d{2}-\d{2})/);
+    
+    if (dateMatch) {
+      const date = dateMatch[1];
+      const beforeDate = line.substring(contractNum.length, line.indexOf(date)).trim();
       
-      // 현재 줄에서 보험사와 상품명 추출
-      const restOfLine = line.substring(numMatch[0].length).trim();
+      // 보험사명 패턴
+      const companyPatterns = [
+        '메리츠화재', '메리츠화 재',
+        'DB손보',
+        'NH농협손보', 'NH농협 손보',
+        '삼성생명',
+        '교보생명',
+        '우정사업본부', '우정사업 본부'
+      ];
       
-      // 보험사명과 상품명 분리
-      // 패턴: "보험사명 상품명 날짜"
       let company = '';
-      let product = '';
-      let date = '';
+      let product = beforeDate;
       
-      // 날짜 패턴 찾기
-      const dateMatch = restOfLine.match(/(\d{4}-\d{2}-\d{2})/);
-      
-      if (dateMatch) {
-        date = dateMatch[1];
-        const beforeDate = restOfLine.substring(0, dateMatch.index).trim();
+      // 알려진 보험사 찾기
+      for (const pattern of companyPatterns) {
+        const normalizedPattern = pattern.replace(/\s/g, '');
+        const normalizedBeforeDate = beforeDate.replace(/\s/g, '');
         
-        // 보험사명과 상품명 분리
-        const parts = beforeDate.split(/\s+/);
-        
-        if (parts.length >= 2) {
-          // 첫 1-2단어가 보험사, 나머지가 상품명
-          const possibleCompanies = ['메리츠화재', 'DB손보', 'NH농협손보', '삼성생명', '교보생명', '우정사업본부'];
-          
-          // 알려진 보험사 찾기
-          let foundCompany = false;
-          for (const pc of possibleCompanies) {
-            if (beforeDate.includes(pc.replace(/\s/g, ''))) {
-              company = pc;
-              foundCompany = true;
-              // 보험사명 뒤의 텍스트를 상품명으로
-              const companyIndex = beforeDate.indexOf(pc.replace(/\s/g, ''));
-              product = beforeDate.substring(companyIndex + pc.replace(/\s/g, '').length).trim();
-              break;
-            }
-          }
-          
-          // 알려진 보험사가 없으면 첫 2단어를 보험사로
-          if (!foundCompany) {
-            company = parts.slice(0, 2).join('');
-            product = parts.slice(2).join(' ');
-          }
-        } else {
-          product = beforeDate;
+        if (normalizedBeforeDate.includes(normalizedPattern)) {
+          company = pattern.replace(/\s/g, '');
+          // 보험사명 다음부터가 상품명
+          const companyIndex = normalizedBeforeDate.indexOf(normalizedPattern);
+          product = normalizedBeforeDate.substring(companyIndex + normalizedPattern.length).trim();
+          break;
         }
       }
       
-      // 다음 줄에서 납입 정보 찾기
-      let paymentInfo = {
+      // 보험사를 못 찾았으면 전체를 상품명으로
+      if (!company) {
+        product = beforeDate;
+      }
+      
+      contracts.push({
+        번호: contractNum,
+        보험사: company,
+        상품명: product,
+        가입일: date,
         납입방법: '-',
         납입기간: '-',
         만기나이: '-',
         월보험료: '0'
-      };
+      });
       
-      if (i + 1 < lines.length) {
-        const nextLine = lines[i + 1];
-        
-        // 납입 정보 패턴: "월납 20년 74세 60,590원"
-        const paymentMatch = nextLine.match(/(월납|년납|일시납)\s+(\d+)년\s+(\d+|종신)세\s+([\d,]+)원/);
-        
-        if (paymentMatch) {
-          paymentInfo = {
-            납입방법: paymentMatch[1],
-            납입기간: paymentMatch[2] + '년',
-            만기나이: paymentMatch[3] === '종신' ? '종신' : paymentMatch[3] + '세',
-            월보험료: paymentMatch[4].replace(/,/g, '')
-          };
-          i++; // 다음 줄 스킵
-        }
-      }
-      
-      if (company || product) {
-        contracts.push({
-          번호: contractNum,
-          보험사: company || '-',
-          상품명: product || restOfLine,
-          가입일: date || '-',
-          ...paymentInfo
-        });
-        
-        console.log(`  ✓ 계약 ${contractNum}: ${company} ${product}`);
-      }
+      console.log(`  ✓ 계약 ${contractNum}: ${company || '(보험사 미상)'} - ${product.substring(0, 30)}...`);
     }
-    
-    i++;
   }
   
-  console.log(`📋 계약 리스트: ${contracts.length}개 추출 완료`);
+  // Step 3: 납입정보 추출 (월납, 년수, 나이, 금액)
+  // 패턴: "월납 월납 월납 ..." 다음 줄에 "20년 74세 60,590원 20년 80세 144,630원 ..."
+  const paymentSectionIndex = lines.findIndex(l => l.includes('월납') && l.split('월납').length > 2);
+  
+  if (paymentSectionIndex !== -1 && paymentSectionIndex + 1 < lines.length) {
+    const paymentLine = lines[paymentSectionIndex + 1];
+    
+    // "20년 74세 60,590원" 패턴 찾기
+    const paymentMatches = paymentLine.matchAll(/(\d+)년\s+(\d+|종신)세\s+([\d,]+)원/g);
+    
+    let paymentIndex = 0;
+    for (const match of paymentMatches) {
+      if (paymentIndex < contracts.length) {
+        contracts[paymentIndex].납입방법 = '월납';
+        contracts[paymentIndex].납입기간 = match[1] + '년';
+        contracts[paymentIndex].만기나이 = match[2] === '종신' ? '종신' : match[2] + '세';
+        contracts[paymentIndex].월보험료 = match[3].replace(/,/g, '');
+        
+        console.log(`  ✓ 납입정보 추가: 계약 ${contracts[paymentIndex].번호} - ${match[3]}원`);
+        paymentIndex++;
+      }
+    }
+  } else {
+    console.warn('⚠️ 납입정보를 찾을 수 없습니다');
+  }
+  
+  console.log(`📋 최종 계약 리스트: ${contracts.length}개 추출 완료`);
   
   return contracts;
 }
@@ -200,8 +204,15 @@ function parseContractList(text) {
 function parseCoverageStatus(text) {
   const coverages = [];
   
-  // 일단 빈 배열 반환 (추가 개발 필요)
-  console.log('⚠️ 담보별 현황 파싱은 추가 개발 필요');
+  // "님의 담보별 가입 현황" 또는 "님의 상품별 가입현황" 섹션 찾기
+  const coverageSectionMatch = text.match(/님의 (?:담보별 가입 현황|상품별 가입현황)([\s\S]*?)(?=님의 전체 담보|충청GA사업단|--- PAGE_BREAK ---|$)/);
+  
+  if (!coverageSectionMatch) {
+    console.warn('⚠️ 담보별 현황 섹션을 찾을 수 없습니다');
+    return [];
+  }
+  
+  console.log('⚠️ 담보별 현황 파싱 개발 중...');
   
   return coverages;
 }
@@ -222,9 +233,20 @@ function parseDiagnosisStatus(text) {
     '보철치료비', '가족/일상/자녀배상', '화재벌금'
   ];
   
+  // "님의 전체 담보 진단 현황" 섹션 찾기
+  const diagnosisSectionMatch = text.match(/님의 전체 담보 진단 현황([\s\S]*?)$/);
+  
+  if (!diagnosisSectionMatch) {
+    console.warn('⚠️ 진단 현황 섹션을 찾을 수 없습니다');
+    return [];
+  }
+  
+  const sectionText = diagnosisSectionMatch[1];
+  
   for (const dambo of damboItems) {
-    const damboPattern = new RegExp(`${dambo}\\s+([\\d,억만]+)\\s+([\\d,억만]+)\\s+([-+]?[\\d,억만]+)\\s+(충분|부족|미가입)`);
-    const match = text.match(damboPattern);
+    const escapedDambo = dambo.replace(/[()]/g, '\\$&');
+    const damboPattern = new RegExp(`${escapedDambo}\\s+([\\d,억만천]+)\\s+([\\d,억만천]+)\\s+([-+]?[\\d,억만천]+)\\s+(충분|부족|미가입)`);
+    const match = sectionText.match(damboPattern);
     
     if (match) {
       diagnoses.push({
