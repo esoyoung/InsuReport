@@ -1,360 +1,264 @@
-import * as pdfjsLib from 'pdfjs-dist';
-import { parseWithFallback } from './aiParser';
-
-// PDF.js worker 설정
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// src/utils/pdfParser.js
 
 /**
- * PDF 파일을 파싱하여 보험 데이터 추출
+ * KB 보장분석 PDF 파싱 유틸리티
+ * 정규식 기반 데이터 추출
  */
-export async function parsePDF(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  
-  let fullText = '';
-  let structuredPages = [];
-  
-  // 모든 페이지 텍스트 추출 (좌표 정보 포함)
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    
-    // 좌표 기반 정렬
-    const sortedItems = textContent.items.sort((a, b) => {
-      // Y좌표로 먼저 정렬 (위에서 아래)
-      const yDiff = Math.abs(b.transform[5] - a.transform[5]);
-      if (yDiff > 5) { // 5px 이상 차이나면 다른 행
-        return b.transform[5] - a.transform[5];
-      }
-      // 같은 행이면 X좌표로 정렬 (왼쪽에서 오른쪽)
-      return a.transform[4] - b.transform[4];
-    });
-    
-    // 행별로 그룹화
-    const lines = [];
-    let currentLine = [];
-    let currentY = null;
-    
-    sortedItems.forEach(item => {
-      const y = Math.round(item.transform[5]);
-      
-      if (currentY === null || Math.abs(currentY - y) < 5) {
-        currentLine.push(item.str);
-        currentY = y;
-      } else {
-        if (currentLine.length > 0) {
-          lines.push(currentLine.join(' '));
-        }
-        currentLine = [item.str];
-        currentY = y;
-      }
-    });
-    
-    if (currentLine.length > 0) {
-      lines.push(currentLine.join(' '));
-    }
-    
-    const pageText = lines.join('\n');
-    structuredPages.push({
-      pageNumber: i,
-      text: pageText,
-      lines: lines
-    });
-    
-    fullText += `\n===== PAGE ${i} =====\n` + pageText;
-  }
 
-  console.log('📄 PDF 텍스트 추출 완료 (총 ' + pdf.numPages + '페이지)');
-  console.log('첫 500자:', fullText.substring(0, 500));
-
-  // 🆕 전체 텍스트 자동 다운로드
-  try {
-    const blob = new Blob([fullText], { type: 'text/plain; charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pdf_text_${new Date().getTime()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    console.log('✅ 전체 텍스트 파일 다운로드 시작');
-  } catch (error) {
-    console.error('❌ 다운로드 실패:', error);
-  }
-
-  // 데이터 파싱 (AI 파싱 → 실패 시 정규식 폴백)
-  console.log('🤖 AI 파싱 시도');
-  
-  const parsedData = await parseWithFallback(
-    fullText, 
-    (text) => parseInsuranceData(text, structuredPages)
-  );
-  
-  return parsedData;
-}
-
-/**
- * 텍스트에서 보험 데이터 추출
- */
-function parseInsuranceData(text, structuredPages) {
-  // 고객 정보 추출
-  const customerInfo = extractCustomerInfo(text, structuredPages);
-  
-  // 계약 리스트 추출
-  const contracts = extractContracts(text, structuredPages);
-  
-  // 담보 현황 추출
-  const coverages = extractCoverages(text, structuredPages);
-  
-  // 진단 현황 추출
-  const diagnosis = extractDiagnosis(text, structuredPages);
-
-  console.log('✅ 파싱 결과:', { 
-    customerInfo, 
-    contracts: contracts.length, 
-    coverages: coverages.length, 
-    diagnosis: diagnosis.length 
-  });
-
-  return {
-    customerInfo,
-    contracts,
-    coverages,
-    diagnosis,
-    rawText: text
-  };
-}
-
-/**
- * 고객 정보 추출 (개선 v2)
- */
-function extractCustomerInfo(text, structuredPages) {
-  // 패턴: "강민재 (32세 ,여자)   님의 전체 보장현황"
-  const nameMatch = text.match(/([가-힣]{2,4})\s*[\(（]\s*(\d+)세\s*[,，]\s*(남자|여자)\s*[\)）]\s*님의\s*전체/);
-  
-  if (nameMatch) {
-    const name = nameMatch[1];
-    const age = parseInt(nameMatch[2]);
-    const gender = nameMatch[3];
-    
-    // 계약 수와 월 보험료 찾기 (같은 페이지)
-    // 패턴: " 3  153,500" (계약수  월보험료)
-    const statsMatch = text.match(/\s(\d+)\s+([\d,]+)\s+0\s+0\s+0\s+\1/);
-    
-    return {
-      name: name,
-      age: age,
-      gender: gender,
-      contractCount: statsMatch ? parseInt(statsMatch[1]) : 0,
-      monthlyPremium: statsMatch ? parseInt(statsMatch[2].replace(/,/g, '')) : 0,
-      reportDate: new Date().toISOString().split('T')[0]
-    };
-  }
-  
-  // 폴백 패턴
-  return {
-    name: '알 수 없음',
-    age: 0,
-    gender: '알 수 없음',
-    contractCount: 0,
-    monthlyPremium: 0,
-    reportDate: new Date().toISOString().split('T')[0]
-  };
-}
-
-/**
- * 계약 리스트 추출 (개선 v2)
- */
-function extractContracts(text, structuredPages) {
-  const contracts = [];
-  
-  // "전체 계약리스트" 페이지 찾기
-  const contractPage = structuredPages.find(page => 
-    page.text.includes('전체 계약리스트') || 
-    page.text.includes('전체 계약 리스트')
-  );
-  
-  if (!contractPage) {
-    console.warn('⚠️ 전체 계약 리스트 페이지를 찾을 수 없습니다');
-    return [];
-  }
-
-  console.log('📋 계약 페이지 발견:', contractPage.pageNumber);
-  
-  // 패턴: 번호  보험사  상품명  가입일  납입방식  납입기간  만기  보험료
-  // 예: 1   새마을금고중앙회   無MG나를위한여성암공제Ⅳ(만기환급형)   2018-09-04   월납   25년   80세   73,960 원
-  
-  const lines = contractPage.lines;
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    
-    // 번호로 시작하는 계약 행 매칭
-    const match = line.match(/^(\d+)\s+(.+?)\s+(無.+?)\s+(\d{4}-\d{2}-\d{2})\s+(월납|년납)\s+(\d+년)\s+(\d+세|종신)\s+([\d,]+)\s*원/);
-    
-    if (match) {
-      contracts.push({
-        no: parseInt(match[1]),
-        company: match[2].trim(),
-        productName: match[3].trim(),
-        startDate: match[4],
-        paymentType: match[5],
-        paymentPeriod: match[6],
-        maturityAge: match[7],
-        premium: parseInt(match[8].replace(/,/g, ''))
-      });
-      
-      console.log(`  ✓ 계약 ${match[1]}: ${match[2]} - ${match[3]}`);
-    }
-  }
-
-  console.log(`📋 계약 리스트: ${contracts.length}개 추출`);
-  return contracts;
-}
-
-/**
- * 담보 현황 추출 (개선 v2)
- */
-function extractCoverages(text, structuredPages) {
-  const coverageTypes = [
-    { key: 'deathInjury', name: '상해사망', category: '사망·장해' },
-    { key: 'deathDisease', name: '질병사망', category: '사망·장해' },
-    { key: 'disabilityInjury', name: '상해80%미만후유장해', category: '사망·장해' },
-    { key: 'disabilityDisease', name: '질병80%미만후유장해', category: '사망·장해' },
-    { key: 'cancerGeneral', name: '일반암', category: '암 진단' },
-    { key: 'cancerMinor', name: '유사암', category: '암 진단' },
-    { key: 'cancerExpensive', name: '고액암', category: '암 진단' },
-    { key: 'cancerTreatment', name: '고액(표적)항암치료비', category: '암 진단' },
-    { key: 'stroke', name: '뇌졸중', category: '뇌/심장 진단' },
-    { key: 'cerebralHemorrhage', name: '뇌출혈', category: '뇌/심장 진단' },
-    { key: 'ischemicHeart', name: '허혈성심장질환', category: '뇌/심장 진단' },
-    { key: 'acuteMyocardial', name: '급성심근경색증', category: '뇌/심장 진단' },
-    { key: 'medicalInjury', name: '상해입원의료비', category: '실손 의료비' },
-    { key: 'medicalDisease', name: '질병입원의료비', category: '실손 의료비' },
-    { key: 'medicalOutpatient', name: '통원의료비', category: '실손 의료비' },
-  ];
-
-  const coverages = [];
-
-  // "전체 보장현황" 페이지 찾기
-  const coveragePage = structuredPages.find(page => 
-    page.text.includes('전체 보장현황')
-  );
-  
-  if (!coveragePage) {
-    console.warn('⚠️ 담보별 현황 페이지를 찾을 수 없습니다');
-    return coverages;
-  }
-
-  console.log('🛡️ 담보 페이지 발견:', coveragePage.pageNumber);
-
-  coverageTypes.forEach(type => {
-    // 패턴: "상해사망   1,500만" 형태 찾기
-    const regex = new RegExp(`${type.name}\\s+([\\d,]+만|0)`, 'i');
-    const match = coveragePage.text.match(regex);
-    
-    let current = 0;
-    let recommended = 0;
-    
-    if (match && match[1] !== '0') {
-      current = parseAmount(match[1]);
-      recommended = current;
-    }
-
-    coverages.push({
-      ...type,
-      current,
-      recommended
-    });
-  });
-
-  console.log(`🛡️ 담보 현황: ${coverages.length}개 항목`);
-  return coverages;
-}
-
-/**
- * 진단 현황 추출 (개선 v2)
- */
-function extractDiagnosis(text, structuredPages) {
-  const diagnosis = [];
-  
-  // "전체 담보 진단 현황" 페이지 찾기
-  const diagnosisPage = structuredPages.find(page => 
-    page.text.includes('전체 담보 진단 현황')
-  );
-  
-  if (!diagnosisPage) {
-    console.warn('⚠️ 담보별 진단현황 페이지를 찾을 수 없습니다');
-    return diagnosis;
-  }
-
-  console.log('📊 진단 페이지 발견:', diagnosisPage.pageNumber);
-  
-  const lines = diagnosisPage.lines;
-  
-  // 패턴: 담보명   권장금액   가입금액   차이   상태
-  // 예:  상해사망   2억   1,500만   -1억 8,500만   부족
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    
-    // 진단 행 매칭
-    const match = line.match(/^([가-힣0-9\/\(\)]+?)\s+([\d,억만]+)\s+([\d,억만]+|0)\s+([+-]?[\d,억만]+)\s+(충분|부족|미가입)$/);
-    
-    if (match) {
-      const coverageName = match[1].trim();
-      const recommended = parseAmount(match[2]);
-      const current = match[3] === '0' ? 0 : parseAmount(match[3]);
-      const difference = parseAmount(match[4]);
-      const status = match[5];
-      
-      diagnosis.push({
-        coverageName,
-        current,
-        recommended,
-        difference,
-        status
-      });
-      
-      console.log(`  ✓ ${coverageName}: ${current}만 / ${recommended}만 (${status})`);
-    }
-  }
-
-  console.log(`📊 진단 현황: ${diagnosis.length}개 항목`);
-  return diagnosis;
-}
-
-/**
- * 금액 문자열을 숫자로 변환 (만원 단위)
- */
-function parseAmount(amountStr) {
-  if (!amountStr || amountStr === '0') return 0;
+// 숫자 문자열을 숫자로 변환 (억, 만 단위 처리)
+function parseAmount(str) {
+  if (!str || str === '-' || str === '0') return 0;
   
   let amount = 0;
+  const billions = str.match(/([\d,]+)억/);
+  const tenThousands = str.match(/([\d,]+)만/);
+  const thousands = str.match(/([\d,]+)천/);
   
-  // +/- 부호 제거
-  amountStr = amountStr.replace(/[+-]/g, '');
-  
-  // 억 처리
-  const eokMatch = amountStr.match(/(\d+)억/);
-  if (eokMatch) {
-    amount += parseInt(eokMatch[1]) * 10000;
+  if (billions) {
+    amount += parseInt(billions[1].replace(/,/g, '')) * 100000000;
   }
-  
-  // 만 처리
-  const manMatch = amountStr.match(/(\d{1,3}(?:,?\d{3})*)만/);
-  if (manMatch) {
-    amount += parseInt(manMatch[1].replace(/,/g, ''));
+  if (tenThousands) {
+    amount += parseInt(tenThousands[1].replace(/,/g, '')) * 10000;
   }
-  
-  // 순수 숫자만 있는 경우
-  if (!eokMatch && !manMatch) {
-    const numMatch = amountStr.match(/(\d{1,3}(?:,?\d{3})*)/);
-    if (numMatch) {
-      amount = parseInt(numMatch[1].replace(/,/g, ''));
-    }
+  if (thousands) {
+    amount += parseInt(thousands[1].replace(/,/g, '')) * 1000;
   }
   
   return amount;
+}
+
+// 금액을 한글 표기로 변환
+function formatAmount(amount) {
+  if (amount === 0) return '-';
+  
+  const billion = Math.floor(amount / 100000000);
+  const tenThousand = Math.floor((amount % 100000000) / 10000);
+  
+  let result = '';
+  if (billion > 0) result += `${billion}억`;
+  if (tenThousand > 0) result += `${tenThousand}만`;
+  
+  return result || '-';
+}
+
+// 고객 정보 파싱
+function parseCustomerInfo(text) {
+  // "강민재 (32세 ,여자)   님의 전체 보장현황" 패턴
+  const nameMatch = text.match(/([\w가-힣]+)\s*\((\d+)세\s*,\s*(남자|여자)\)/);
+  
+  if (!nameMatch) {
+    console.warn('⚠️ 고객 정보를 찾을 수 없습니다');
+    return null;
+  }
+  
+  // 계약 수와 월보험료 추출 - "3  153,500" 패턴
+  const summaryMatch = text.match(/님의 전체 보장현황.*?\n.*?(\d+)\s+([\d,]+)/s);
+  
+  const customerInfo = {
+    이름: nameMatch[1],
+    나이: parseInt(nameMatch[2]),
+    성별: nameMatch[3],
+    계약수: summaryMatch ? parseInt(summaryMatch[1]) : 0,
+    월보험료: summaryMatch ? parseInt(summaryMatch[2].replace(/,/g, '')) : 0
+  };
+  
+  console.log('👤 고객 정보:', customerInfo);
+  return customerInfo;
+}
+
+// 계약 리스트 파싱 (개선된 버전)
+function parseContractList(text) {
+  const lines = text.split('\n');
+  const contracts = [];
+  
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    
+    // "님의 전체 계약리스트" 섹션 찾기
+    if (line.includes('님의 전체 계약리스트') || line.includes('전체 계약리스트')) {
+      i++;
+      continue;
+    }
+    
+    // 계약 번호로 시작하는 줄 찾기 (1, 2, 3 등)
+    const contractNumMatch = line.match(/^(\d+)\s+/);
+    
+    if (contractNumMatch) {
+      const contractNum = contractNumMatch[1];
+      let fullLine = line;
+      
+      // 다음 줄들을 합쳐서 완전한 계약 정보 구성
+      let j = i + 1;
+      while (j < lines.length && !lines[j].trim().match(/^\d+\s+/) && j < i + 5) {
+        fullLine += ' ' + lines[j].trim();
+        j++;
+      }
+      
+      // 계약 정보 파싱
+      // 패턴: 번호 보험사 상품명 가입일 납입방법 납입기간 만기나이 보험료
+      const contractMatch = fullLine.match(/^(\d+)\s+(.*?)\s+(無\S+.*?)\s+(\d{4}-\d{2}-\d{2})\s+(월납|년납|일시납)\s+(\d+년)\s+(\d+세)\s+([\d,]+)\s*원/);
+      
+      if (contractMatch) {
+        const [, num, company, product, date, method, period, age, premium] = contractMatch;
+        
+        contracts.push({
+          번호: num,
+          보험사: company.trim().replace(/\s+/g, ''),
+          상품명: product.trim(),
+          가입일: date,
+          납입방법: method,
+          납입기간: period,
+          만기나이: age,
+          월보험료: premium.replace(/,/g, '')
+        });
+        
+        i = j - 1;
+      }
+    }
+    
+    i++;
+  }
+  
+  console.log(`📋 계약 리스트: ${contracts.length}개 추출`);
+  contracts.forEach(c => console.log(`  - ${c.보험사} ${c.상품명} (${c.월보험료}원)`));
+  
+  return contracts;
+}
+
+// 담보별 현황 파싱 (개선 필요)
+function parseCoverageStatus(text) {
+  const coverages = [];
+  
+  // "님의 담보별 가입 현황" 섹션 찾기
+  const coverageSection = text.match(/님의 담보별 가입 현황[\s\S]*?(?=님의|충청GA사업단|$)/);
+  
+  if (!coverageSection) {
+    console.warn('⚠️ 담보별 현황 섹션을 찾을 수 없습니다');
+    return [];
+  }
+  
+  const lines = coverageSection[0].split('\n');
+  
+  for (const line of lines) {
+    // 담보명, 상품명, 담보내역, 보장금액, 가입일, 만기일 추출
+    const match = line.match(/^\s*([\w가-힣/()]+)\s+(無\S+.*?)\s+([\w가-힣\[\]/%]+)\s+([\d,]+만)\s+(\d{4}-\d{2}-\d{2})\s+(\d{4}-\d{2}-\d{2})/);
+    
+    if (match) {
+      coverages.push({
+        담보명: match[1].trim(),
+        상품명: match[2].trim(),
+        담보내역: match[3].trim(),
+        보장금액: match[4],
+        가입일: match[5],
+        만기일: match[6]
+      });
+    }
+  }
+  
+  console.log(`📊 담보별 현황: ${coverages.length}개 추출`);
+  return coverages;
+}
+
+// 진단 현황 파싱 (개선된 버전)
+function parseDiagnosisStatus(text) {
+  const diagnoses = [];
+  
+  // "님의 전체 담보 진단 현황" 섹션 찾기
+  const diagnosisSection = text.match(/님의 전체 담보 진단 현황[\s\S]*?(?=충청GA사업단|$)/);
+  
+  if (!diagnosisSection) {
+    console.warn('⚠️ 진단 현황 섹션을 찾을 수 없습니다');
+    return [];
+  }
+  
+  const lines = diagnosisSection[0].split('\n');
+  
+  for (const line of lines) {
+    // 더 유연한 패턴: 담보명 권장금액 가입금액 부족금액 상태
+    // 공백이 여러 개일 수 있고, +/- 부호 처리
+    const match = line.match(/^\s*([\w가-힣/()]+)\s+([\d억만천,+-]+)\s+([\d억만천,+-]+)\s+([\d억만천,+\-]+)\s+(부족|충분|미가입)/);
+    
+    if (match) {
+      const [, coverage, recommended, current, gap, status] = match;
+      
+      // 숫자 정제
+      const cleanRecommended = recommended.replace(/\+/g, '').trim();
+      const cleanCurrent = current.replace(/\+/g, '').trim();
+      const cleanGap = gap.trim();
+      
+      diagnoses.push({
+        담보명: coverage.trim(),
+        권장금액: cleanRecommended,
+        가입금액: cleanCurrent,
+        부족금액: cleanGap,
+        상태: status
+      });
+    }
+  }
+  
+  // 상태별 카운트
+  const statusCount = {
+    부족: diagnoses.filter(d => d.상태 === '부족').length,
+    미가입: diagnoses.filter(d => d.상태 === '미가입').length,
+    충분: diagnoses.filter(d => d.상태 === '충분').length
+  };
+  
+  console.log(`📊 진단 현황: ${diagnoses.length}개 항목 (부족 ${statusCount.부족}, 미가입 ${statusCount.미가입}, 충분 ${statusCount.충분})`);
+  
+  return diagnoses;
+}
+
+// 메인 파싱 함수
+export async function parsePDF(file) {
+  try {
+    console.log('📄 PDF 파싱 시작:', file.name);
+    
+    // PDF.js로 텍스트 추출
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    
+    let fullText = '';
+    
+    // 모든 페이지 텍스트 추출
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      
+      fullText += `\n===== PAGE ${i} =====\n`;
+      fullText += textContent.items.map(item => item.str).join(' ');
+    }
+    
+    console.log('📝 텍스트 추출 완료:', fullText.length, '글자');
+    
+    // 자동 다운로드 (디버깅용)
+    const blob = new Blob([fullText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pdf_text_${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    // 데이터 파싱
+    const customerInfo = parseCustomerInfo(fullText);
+    const contracts = parseContractList(fullText);
+    const coverages = parseCoverageStatus(fullText);
+    const diagnoses = parseDiagnosisStatus(fullText);
+    
+    const result = {
+      고객정보: customerInfo,
+      계약리스트: contracts,
+      담보현황: coverages,
+      진단현황: diagnoses
+    };
+    
+    console.log('✅ 파싱 완료:', result);
+    return result;
+    
+  } catch (error) {
+    console.error('❌ PDF 파싱 실패:', error);
+    throw error;
+  }
 }
