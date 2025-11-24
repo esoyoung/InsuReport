@@ -66,7 +66,7 @@ function parseCustomerInfo(text) {
   return customerInfo;
 }
 
-// 계약 리스트 파싱 (개선된 버전)
+// 계약 리스트 파싱 (멀티라인 처리 개선)
 function parseContractList(text) {
   const lines = text.split('\n');
   const contracts = [];
@@ -126,7 +126,7 @@ function parseContractList(text) {
   return contracts;
 }
 
-// 담보별 현황 파싱 (개선 필요)
+// 담보별 현황 파싱
 function parseCoverageStatus(text) {
   const coverages = [];
   
@@ -213,6 +213,11 @@ function parseDiagnosisStatus(text) {
 export async function parsePDF(file) {
   try {
     console.log('📄 PDF 파싱 시작:', file.name);
+    
+    // PDF.js 로드 확인
+    if (!window.pdfjsLib) {
+      throw new Error('PDF.js 라이브러리가 로드되지 않았습니다. 페이지를 새로고침해주세요.');
+    }
     
     // PDF.js로 텍스트 추출
     const pdfjsLib = window.pdfjsLib;
