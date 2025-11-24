@@ -4,9 +4,6 @@ import { parseWithFallback } from './aiParser';
 // PDF.js worker 설정
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
-// AI 파싱 사용 여부 (환경 변수로 제어)
-
-
 /**
  * PDF 파일을 파싱하여 보험 데이터 추출
  */
@@ -69,6 +66,22 @@ export async function parsePDF(file) {
 
   console.log('📄 PDF 텍스트 추출 완료 (총 ' + pdf.numPages + '페이지)');
   console.log('첫 500자:', fullText.substring(0, 500));
+
+  // 🆕 전체 텍스트 자동 다운로드
+  try {
+    const blob = new Blob([fullText], { type: 'text/plain; charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pdf_text_${new Date().getTime()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    console.log('✅ 전체 텍스트 파일 다운로드 시작');
+  } catch (error) {
+    console.error('❌ 다운로드 실패:', error);
+  }
 
   // 데이터 파싱 (AI 파싱 → 실패 시 정규식 폴백)
   console.log('🤖 AI 파싱 시도');
@@ -431,3 +444,4 @@ function parseAmount(amountStr) {
   
   return amount;
 }
+// AI 파싱 사용 여부 (환경 변수로 제어)
