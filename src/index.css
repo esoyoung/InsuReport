@@ -2,13 +2,212 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 기본 폰트 및 스타일 */
 body {
   margin: 0;
-  font-family: 'Noto Sans KR', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* ===== 프린트 최적화 CSS (A4 규격) ===== */
+@media print {
+  /* 페이지 설정 */
+  @page {
+    size: A4;
+    margin: 10mm 12mm; /* 상하 10mm, 좌우 12mm */
+  }
+  
+  /* 불필요한 요소 숨기기 */
+  .no-print {
+    display: none !important;
+  }
+  
+  /* 페이지 브레이크 */
+  .page-break {
+    page-break-after: always;
+    page-break-inside: avoid;
+  }
+  
+  /* 전체 컨테이너 */
+  body {
+    font-size: 8pt !important;
+    line-height: 1.3 !important;
+    color: #000 !important;
+    background: white !important;
+  }
+  
+  /* 섹션 간격 최소화 */
+  section {
+    margin-bottom: 8mm !important;
+  }
+  
+  /* 카드/박스 스타일 제거 */
+  .bg-white, .rounded-lg, .shadow {
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  
+  /* 패딩 최소화 */
+  .p-6, .px-4, .py-4, .p-4 {
+    padding: 1mm !important;
+  }
+  
+  /* 제목 스타일 */
+  h1 {
+    font-size: 14pt !important;
+    font-weight: bold !important;
+    margin-bottom: 3mm !important;
+    color: #0d9488 !important; /* Teal */
+  }
+  
+  h2 {
+    font-size: 11pt !important;
+    font-weight: bold !important;
+    margin-bottom: 2mm !important;
+    color: #0d9488 !important;
+  }
+  
+  /* 테이블 스타일 */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 8pt !important;
+    margin-bottom: 2mm !important;
+  }
+  
+  /* 테이블 헤더 */
+  thead th {
+    background-color: #ccf3ef !important; /* 연한 Teal */
+    color: #0f766e !important;
+    font-weight: bold !important;
+    font-size: 7pt !important;
+    padding: 1mm 1.5mm !important;
+    text-align: left !important;
+    border: 0.5pt solid #0d9488 !important;
+    text-transform: none !important;
+  }
+  
+  /* 테이블 바디 */
+  tbody td {
+    padding: 1mm 1.5mm !important;
+    font-size: 8pt !important;
+    border: 0.3pt solid #d1d5db !important;
+    line-height: 1.2 !important;
+  }
+  
+  /* 테이블 행 */
+  tbody tr {
+    page-break-inside: avoid !important;
+  }
+  
+  tbody tr:nth-child(even) {
+    background-color: #f9fafb !important;
+  }
+  
+  /* 텍스트 줄바꿈 방지 */
+  .whitespace-nowrap {
+    white-space: nowrap !important;
+  }
+  
+  /* 계약현황 요약 - 4열 그리드 */
+  .contract-summary-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 2mm !important;
+    margin-bottom: 3mm !important;
+  }
+  
+  .contract-summary-item {
+    border: 0.5pt solid #d1d5db !important;
+    padding: 2mm !important;
+    background-color: #f9fafb !important;
+  }
+  
+  .contract-summary-label {
+    font-size: 7pt !important;
+    color: #6b7280 !important;
+    margin-bottom: 0.5mm !important;
+  }
+  
+  .contract-summary-value {
+    font-size: 10pt !important;
+    font-weight: bold !important;
+    color: #000 !important;
+  }
+  
+  /* 담보별 진단현황 - 상태 배지 */
+  .status-badge {
+    display: inline-block !important;
+    padding: 0.5mm 2mm !important;
+    font-size: 7pt !important;
+    font-weight: bold !important;
+    border-radius: 2mm !important;
+    border: 0.5pt solid !important;
+  }
+  
+  .status-충분 {
+    background-color: #d1fae5 !important;
+    color: #065f46 !important;
+    border-color: #10b981 !important;
+  }
+  
+  .status-부족 {
+    background-color: #fee2e2 !important;
+    color: #991b1b !important;
+    border-color: #ef4444 !important;
+  }
+  
+  .status-미가입 {
+    background-color: #f3f4f6 !important;
+    color: #374151 !important;
+    border-color: #9ca3af !important;
+  }
+  
+  /* 숫자 오른쪽 정렬 */
+  .text-right {
+    text-align: right !important;
+  }
+  
+  /* 컬러 보존 */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* 오버플로우 방지 */
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+  
+  /* 긴 텍스트 줄바꿈 허용 (상품명 등) */
+  .allow-wrap {
+    white-space: normal !important;
+    word-break: keep-all !important;
+    overflow-wrap: break-word !important;
+  }
+}
+
+/* ===== 화면 표시용 스타일 ===== */
+@media screen {
+  /* 화면에서는 보기 좋게 */
+  .contract-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  
+  @media (min-width: 768px) {
+    .contract-summary-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
 }

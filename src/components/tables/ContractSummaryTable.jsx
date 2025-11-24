@@ -17,25 +17,38 @@ export default function ContractSummary({ data }) {
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
-      <h2 className="text-xl font-bold mb-4 text-teal-700">계약현황 요약</h2>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-gray-600">이름</p>
-          <p className="text-lg font-semibold">{고객정보.이름 || '-'}</p>
+      <h2 className="text-xl font-bold mb-6 text-teal-700">계약현황 요약</h2>
+      
+      {/* 4열 그리드 레이아웃 */}
+      <div className="contract-summary-grid">
+        {/* 이름 */}
+        <div className="contract-summary-item">
+          <p className="contract-summary-label text-gray-600 text-sm mb-1">이름</p>
+          <p className="contract-summary-value text-lg font-semibold text-gray-900">
+            {고객정보.이름 || '-'}
+          </p>
         </div>
-        <div>
-          <p className="text-gray-600">나이/성별</p>
-          <p className="text-lg font-semibold">
+        
+        {/* 나이/성별 */}
+        <div className="contract-summary-item">
+          <p className="contract-summary-label text-gray-600 text-sm mb-1">나이 / 성별</p>
+          <p className="contract-summary-value text-lg font-semibold text-gray-900">
             {고객정보.나이 || '-'}세 / {고객정보.성별 || '-'}
           </p>
         </div>
-        <div>
-          <p className="text-gray-600">계약 수</p>
-          <p className="text-lg font-semibold">{고객정보.계약수 || 0}개</p>
+        
+        {/* 계약 수 */}
+        <div className="contract-summary-item">
+          <p className="contract-summary-label text-gray-600 text-sm mb-1">계약 수</p>
+          <p className="contract-summary-value text-lg font-semibold text-gray-900">
+            {고객정보.계약수 || 0}개
+          </p>
         </div>
-        <div>
-          <p className="text-gray-600">월 보험료</p>
-          <p className="text-lg font-semibold">
+        
+        {/* 월 보험료 */}
+        <div className="contract-summary-item">
+          <p className="contract-summary-label text-gray-600 text-sm mb-1">월 보험료</p>
+          <p className="contract-summary-value text-lg font-semibold text-gray-900">
             {(고객정보.월보험료 || 0).toLocaleString()}원
           </p>
         </div>

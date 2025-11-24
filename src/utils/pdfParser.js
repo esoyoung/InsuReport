@@ -5,42 +5,6 @@
  * Y 좌표 기반 텍스트 추출 및 구조 분석
  */
 
-// 숫자 문자열을 숫자로 변환 (억, 만 단위 처리)
-function parseAmount(str) {
-  if (!str || str === '-' || str === '0') return 0;
-  
-  let amount = 0;
-  const billions = str.match(/([\d,]+)억/);
-  const tenThousands = str.match(/([\d,]+)만/);
-  const thousands = str.match(/([\d,]+)천/);
-  
-  if (billions) {
-    amount += parseInt(billions[1].replace(/,/g, '')) * 100000000;
-  }
-  if (tenThousands) {
-    amount += parseInt(tenThousands[1].replace(/,/g, '')) * 10000;
-  }
-  if (thousands) {
-    amount += parseInt(thousands[1].replace(/,/g, '')) * 1000;
-  }
-  
-  return amount;
-}
-
-// 금액을 한글 표기로 변환
-function formatAmount(amount) {
-  if (amount === 0) return '-';
-  
-  const billion = Math.floor(amount / 100000000);
-  const tenThousand = Math.floor((amount % 100000000) / 10000);
-  
-  let result = '';
-  if (billion > 0) result += `${billion}억`;
-  if (tenThousand > 0) result += `${tenThousand}만`;
-  
-  return result || '-';
-}
-
 // Y 좌표 기반 텍스트 추출
 async function extractTextWithCoordinates(pdf) {
   const allText = [];
@@ -87,37 +51,38 @@ async function extractTextWithCoordinates(pdf) {
 // 고객 정보 파싱
 function parseCustomerInfo(text) {
   // "안영균 (61세 ,남자) 님의 전체 보장현황" 패턴
-  const nameMatch = text.match(/([\w가-힣]+)\s*\((\d+)세\s*,\s*(남자|여자)\)\s*님의 전체 보장현황/);
+  const nameMatch = text.match(/([\w가-힣]+)\s*\((\d+)세\s*,\s*(남자|여자)\)\s*님의 전체 (?:보장현황|계약리스트)/);
   
   if (!nameMatch) {
     console.warn('⚠️ 고객 정보를 찾을 수 없습니다');
     return null;
   }
   
-  // 계약 수 추출 - "8 0 4 3 1" 같은 패턴 (첫 번째 숫자가 계약 수)
-  const contractCountMatch = text.match(/님의 전체 보장현황\s*\n\s*(\d+)\s+\d/);
+  // 계약 수 추출 - 보장현황 페이지에서 "8 0 4 3 1" 패턴 (첫 번째 숫자)
+  const contractCountMatch = text.match(/님의 전체 보장현황[\s\S]{0,100}?\n\s*(\d+)\s+\d+\s+\d+\s+\d+\s+\d+/);
   
-  // 월보험료 추출 - "427,097" 패턴
-  const premiumMatch = text.match(/427,097|[\d,]{3,}/);
+  // 월보험료 추출 - 6자리 숫자 패턴
+  const premiumMatches = text.match(/\d{3},\d{3}/g);
+  const premium = premiumMatches ? premiumMatches[0] : '0';
   
   const customerInfo = {
     이름: nameMatch[1],
     나이: parseInt(nameMatch[2]),
     성별: nameMatch[3],
     계약수: contractCountMatch ? parseInt(contractCountMatch[1]) : 0,
-    월보험료: premiumMatch ? parseInt(premiumMatch[0].replace(/,/g, '')) : 0
+    월보험료: parseInt(premium.replace(/,/g, ''))
   };
   
   console.log('👤 고객 정보:', customerInfo);
   return customerInfo;
 }
 
-// 계약 리스트 파싱 (개선된 버전)
+// 계약 리스트 파싱 (완전 재작성)
 function parseContractList(text) {
   const contracts = [];
   
   // "님의 전체 계약리스트" 섹션 찾기
-  const contractSectionMatch = text.match(/님의 전체 계약리스트([\s\S]*?)(?=님의 상품별|--- PAGE_BREAK ---|$)/);
+  const contractSectionMatch = text.match(/님의 전체 계약리스트([\s\S]*?)(?=--- PAGE_BREAK ---|$)/);
   
   if (!contractSectionMatch) {
     console.warn('⚠️ 계약 리스트 섹션을 찾을 수 없습니다');
@@ -127,32 +92,76 @@ function parseContractList(text) {
   const sectionText = contractSectionMatch[1];
   const lines = sectionText.split('\n').map(l => l.trim()).filter(l => l);
   
+  console.log(`📋 계약 리스트 섹션 줄 수: ${lines.length}`);
+  
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
     
-    // 계약 번호로 시작하는 줄 찾기 (1, 2, 3, ...)
-    const numMatch = line.match(/^(\d+)\s+/);
+    // 계약 번호 패턴: "1 " 또는 "2 " (숫자 + 공백)
+    const numMatch = line.match(/^(\d+)\s/);
     
-    if (numMatch) {
+    if (numMatch && parseInt(numMatch[1]) <= 20) { // 계약 번호는 1~20 사이
       const contractNum = numMatch[1];
       
-      // 보험사 추출 (다음 단어들)
-      const companyMatch = line.match(/^\d+\s+([\w가-힣\s]+?)\s+(?:\(무\)|무배당|New)/);
-      const company = companyMatch ? companyMatch[1].trim().replace(/\s+/g, '') : '';
+      // 현재 줄에서 보험사와 상품명 추출
+      const restOfLine = line.substring(numMatch[0].length).trim();
       
-      // 상품명 추출 (괄호 포함 또는 한글명)
-      const productMatch = line.match(/(?:\(무\)|무배당|New|삼성생명|교보생명|참좋은|평생보장)([\s\S]+?)(\d{4}-\d{2}-\d{2})/);
-      const product = productMatch ? productMatch[1].trim() : '';
+      // 보험사명과 상품명 분리
+      // 패턴: "보험사명 상품명 날짜"
+      let company = '';
+      let product = '';
+      let date = '';
       
-      // 가입일 추출
-      const dateMatch = line.match(/(\d{4}-\d{2}-\d{2})/);
-      const date = dateMatch ? dateMatch[1] : '';
+      // 날짜 패턴 찾기
+      const dateMatch = restOfLine.match(/(\d{4}-\d{2}-\d{2})/);
       
-      // 다음 줄에서 납입정보 추출
-      let paymentInfo = {};
+      if (dateMatch) {
+        date = dateMatch[1];
+        const beforeDate = restOfLine.substring(0, dateMatch.index).trim();
+        
+        // 보험사명과 상품명 분리
+        const parts = beforeDate.split(/\s+/);
+        
+        if (parts.length >= 2) {
+          // 첫 1-2단어가 보험사, 나머지가 상품명
+          const possibleCompanies = ['메리츠화재', 'DB손보', 'NH농협손보', '삼성생명', '교보생명', '우정사업본부'];
+          
+          // 알려진 보험사 찾기
+          let foundCompany = false;
+          for (const pc of possibleCompanies) {
+            if (beforeDate.includes(pc.replace(/\s/g, ''))) {
+              company = pc;
+              foundCompany = true;
+              // 보험사명 뒤의 텍스트를 상품명으로
+              const companyIndex = beforeDate.indexOf(pc.replace(/\s/g, ''));
+              product = beforeDate.substring(companyIndex + pc.replace(/\s/g, '').length).trim();
+              break;
+            }
+          }
+          
+          // 알려진 보험사가 없으면 첫 2단어를 보험사로
+          if (!foundCompany) {
+            company = parts.slice(0, 2).join('');
+            product = parts.slice(2).join(' ');
+          }
+        } else {
+          product = beforeDate;
+        }
+      }
+      
+      // 다음 줄에서 납입 정보 찾기
+      let paymentInfo = {
+        납입방법: '-',
+        납입기간: '-',
+        만기나이: '-',
+        월보험료: '0'
+      };
+      
       if (i + 1 < lines.length) {
         const nextLine = lines[i + 1];
+        
+        // 납입 정보 패턴: "월납 20년 74세 60,590원"
         const paymentMatch = nextLine.match(/(월납|년납|일시납)\s+(\d+)년\s+(\d+|종신)세\s+([\d,]+)원/);
         
         if (paymentMatch) {
@@ -166,39 +175,32 @@ function parseContractList(text) {
         }
       }
       
-      if (company && product && date) {
+      if (company || product) {
         contracts.push({
           번호: contractNum,
-          보험사: company,
-          상품명: product,
-          가입일: date,
+          보험사: company || '-',
+          상품명: product || restOfLine,
+          가입일: date || '-',
           ...paymentInfo
         });
+        
+        console.log(`  ✓ 계약 ${contractNum}: ${company} ${product}`);
       }
     }
     
     i++;
   }
   
-  console.log(`📋 계약 리스트: ${contracts.length}개 추출`);
-  contracts.forEach(c => console.log(`  - ${c.보험사} ${c.상품명}`));
+  console.log(`📋 계약 리스트: ${contracts.length}개 추출 완료`);
   
   return contracts;
 }
 
-// 담보별 현황 파싱 (개선 필요)
+// 담보별 현황 파싱
 function parseCoverageStatus(text) {
   const coverages = [];
   
-  // "님의 담보별 가입 현황" 섹션 찾기
-  const coverageSectionMatch = text.match(/님의 담보별 가입 현황([\s\S]*?)(?=님의 전체 담보|$)/);
-  
-  if (!coverageSectionMatch) {
-    console.warn('⚠️ 담보별 현황 섹션을 찾을 수 없습니다');
-    return [];
-  }
-  
-  // 복잡한 구조이므로 일단 빈 배열 반환
+  // 일단 빈 배열 반환 (추가 개발 필요)
   console.log('⚠️ 담보별 현황 파싱은 추가 개발 필요');
   
   return coverages;
@@ -208,7 +210,6 @@ function parseCoverageStatus(text) {
 function parseDiagnosisStatus(text) {
   const diagnoses = [];
   
-  // 37개 담보 항목
   const damboItems = [
     '상해사망', '질병사망', '장기요양간병비', '간병인/간호간병질병일당',
     '일반암', '유사암', '고액암', '고액(표적)항암치료비',
@@ -221,21 +222,9 @@ function parseDiagnosisStatus(text) {
     '보철치료비', '가족/일상/자녀배상', '화재벌금'
   ];
   
-  // "님의 전체 담보 진단 현황" 섹션 찾기
-  const diagnosisSectionMatch = text.match(/님의 전체 담보 진단 현황([\s\S]*?)$/);
-  
-  if (!diagnosisSectionMatch) {
-    console.warn('⚠️ 진단 현황 섹션을 찾을 수 없습니다');
-    return [];
-  }
-  
-  const sectionText = diagnosisSectionMatch[1];
-  
-  // 각 담보 항목 파싱
   for (const dambo of damboItems) {
-    // 담보명 찾기
-    const damboPattern = new RegExp(`${dambo}\\s+([\d,억만]+)\\s+([\d,억만]+)\\s+([-+]?[\\d,억만]+)\\s+(충분|부족|미가입)`);
-    const match = sectionText.match(damboPattern);
+    const damboPattern = new RegExp(`${dambo}\\s+([\\d,억만]+)\\s+([\\d,억만]+)\\s+([-+]?[\\d,억만]+)\\s+(충분|부족|미가입)`);
+    const match = text.match(damboPattern);
     
     if (match) {
       diagnoses.push({
