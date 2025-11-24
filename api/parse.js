@@ -84,23 +84,41 @@ ${text}
 - JSON만 반환 (설명 없이)`;
 
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 8192,
-        }
-      })
-    });
+    let response;
+    let retries = 0;
+    const maxRetries = 3;
+    
+    // 재시도 로직
+    while (retries < maxRetries) {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 8192,
+          }
+        })
+      });
+
+      // 429 에러면 재시도
+      if (response.status === 429 && retries < maxRetries - 1) {
+        retries++;
+        const waitTime = Math.pow(2, retries) * 1000; // 2초, 4초, 8초
+        console.log(`⏳ Rate limit, 재시도 ${retries}/${maxRetries} (${waitTime/1000}초 대기)`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      
+      break;
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -110,6 +128,7 @@ ${text}
         details: errorText
       });
     }
+
 
     const data = await response.json();
     
