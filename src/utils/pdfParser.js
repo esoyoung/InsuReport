@@ -68,36 +68,41 @@ function parseCustomerInfo(text) {
 
 // 계약 리스트 파싱 (멀티라인 처리 개선)
 function parseContractList(text) {
-  const lines = text.split('\n');
   const contracts = [];
+  
+  // "님의 전체 계약리스트" 섹션 찾기
+  const contractSection = text.match(/님의 전체 계약리스트[\s\S]*?(?=님의 상품별|$)/);
+  
+  if (!contractSection) {
+    console.warn('⚠️ 계약 리스트 섹션을 찾을 수 없습니다');
+    return [];
+  }
+  
+  const lines = contractSection[0].split('\n');
   
   let i = 0;
   while (i < lines.length) {
     const line = lines[i].trim();
-    
-    // "님의 전체 계약리스트" 섹션 찾기
-    if (line.includes('님의 전체 계약리스트') || line.includes('전체 계약리스트')) {
-      i++;
-      continue;
-    }
     
     // 계약 번호로 시작하는 줄 찾기 (1, 2, 3 등)
     const contractNumMatch = line.match(/^(\d+)\s+/);
     
     if (contractNumMatch) {
       const contractNum = contractNumMatch[1];
-      let fullLine = line;
       
-      // 다음 줄들을 합쳐서 완전한 계약 정보 구성
+      // 여러 줄을 하나로 합치기
+      let fullLine = line;
       let j = i + 1;
+      
+      // 다음 계약 번호가 나올 때까지 또는 최대 5줄까지 합치기
       while (j < lines.length && !lines[j].trim().match(/^\d+\s+/) && j < i + 5) {
         fullLine += ' ' + lines[j].trim();
         j++;
       }
       
       // 계약 정보 파싱
-      // 패턴: 번호 보험사 상품명 가입일 납입방법 납입기간 만기나이 보험료
-      const contractMatch = fullLine.match(/^(\d+)\s+(.*?)\s+(無\S+.*?)\s+(\d{4}-\d{2}-\d{2})\s+(월납|년납|일시납)\s+(\d+년)\s+(\d+세)\s+([\d,]+)\s*원/);
+      // 패턴: 번호 보험사명 상품명 가입일 납입방법 납입기간 만기나이 월보험료
+      const contractMatch = fullLine.match(/^(\d+)\s+(.*?)\s+(無[^\s]+.*?)\s+(\d{4}-\d{2}-\d{2})\s+(월납|년납|일시납)\s+(\d+년)\s+(\d+세)\s+([\d,]+)\s*원/);
       
       if (contractMatch) {
         const [, num, company, product, date, method, period, age, premium] = contractMatch;
@@ -226,25 +231,52 @@ export async function parsePDF(file) {
     
     let fullText = '';
     
-    // 모든 페이지 텍스트 추출
+    // 모든 페이지 텍스트 추출 (개선된 버전 - 줄바꿈 유지)
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
       
       fullText += `\n===== PAGE ${i} =====\n`;
-      fullText += textContent.items.map(item => item.str).join(' ');
+      
+      // Y 좌표 기준으로 텍스트 아이템 정렬 (위에서 아래로)
+      const sortedItems = textContent.items.sort((a, b) => {
+        // Y 좌표 차이가 5 이상이면 다른 줄
+        if (Math.abs(a.transform[5] - b.transform[5]) > 5) {
+          return b.transform[5] - a.transform[5]; // Y 좌표 내림차순 (위에서 아래)
+        }
+        // 같은 줄이면 X 좌표로 정렬
+        return a.transform[4] - b.transform[4]; // X 좌표 오름차순 (왼쪽에서 오른쪽)
+      });
+      
+      // 줄바꿈 처리
+      let lastY = null;
+      for (const item of sortedItems) {
+        const currentY = item.transform[5];
+        
+        // 새로운 줄인지 확인 (Y 좌표 차이가 5 이상)
+        if (lastY !== null && Math.abs(currentY - lastY) > 5) {
+          fullText += '\n';
+        }
+        
+        fullText += item.str + ' ';
+        lastY = currentY;
+      }
     }
     
     console.log('📝 텍스트 추출 완료:', fullText.length, '글자');
     
     // 자동 다운로드 (디버깅용)
-    const blob = new Blob([fullText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pdf_text_${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const blob = new Blob([fullText], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pdf_text_${Date.now()}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (downloadError) {
+      console.warn('⚠️ 텍스트 다운로드 실패 (무시 가능):', downloadError);
+    }
     
     // 데이터 파싱
     const customerInfo = parseCustomerInfo(fullText);
@@ -252,11 +284,16 @@ export async function parsePDF(file) {
     const coverages = parseCoverageStatus(fullText);
     const diagnoses = parseDiagnosisStatus(fullText);
     
+    // 최소한의 데이터 검증
+    if (!customerInfo) {
+      throw new Error('고객 정보를 추출할 수 없습니다. PDF 형식을 확인해주세요.');
+    }
+    
     const result = {
       고객정보: customerInfo,
-      계약리스트: contracts,
-      담보현황: coverages,
-      진단현황: diagnoses
+      계약리스트: contracts || [],
+      담보현황: coverages || [],
+      진단현황: diagnoses || []
     };
     
     console.log('✅ 파싱 완료:', result);
@@ -264,6 +301,7 @@ export async function parsePDF(file) {
     
   } catch (error) {
     console.error('❌ PDF 파싱 실패:', error);
+    console.error('스택 트레이스:', error.stack);
     throw error;
   }
 }
