@@ -215,7 +215,7 @@ export async function parsePDF(file) {
     console.log('📄 PDF 파싱 시작:', file.name);
     
     // PDF.js로 텍스트 추출
-    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    const pdfjsLib = window.pdfjsLib;
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     
