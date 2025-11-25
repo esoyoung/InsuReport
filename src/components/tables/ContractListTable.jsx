@@ -11,6 +11,13 @@ const sanitizeNumber = (value) => {
 
 const DEFAULT_ROW_COUNT = 6;
 
+const parseDateValue = (value) => {
+  if (!value) return 0;
+  const normalized = String(value).replace(/[.]/g, '-');
+  const parsed = Date.parse(normalized);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
 const formatCompanyName = (rawName) => {
   if (!rawName) return ['-'];
 
@@ -49,8 +56,22 @@ export default function ContractListTable({ data }) {
   const insuranceData = data || {};
   const contractList = insuranceData.계약리스트 || [];
   const hasContracts = contractList.length > 0;
+  const sortedContracts = hasContracts
+    ? [...contractList].sort((a, b) => {
+        const dateB = parseDateValue(b?.계약일 || b?.가입일);
+        const dateA = parseDateValue(a?.계약일 || a?.가입일);
+
+        if (dateB !== dateA) {
+          return dateB - dateA;
+        }
+
+        const numberB = Number.isFinite(Number(b?.번호)) ? Number(b.번호) : 0;
+        const numberA = Number.isFinite(Number(a?.번호)) ? Number(a.번호) : 0;
+        return numberA - numberB;
+      })
+    : [];
   const contracts = hasContracts
-    ? contractList
+    ? sortedContracts
     : Array.from({ length: DEFAULT_ROW_COUNT }, (_, index) => ({ __placeholder: true, 번호: index + 1 }));
 
   if (!insuranceData.고객정보 && !hasContracts) {
@@ -83,12 +104,12 @@ export default function ContractListTable({ data }) {
           <thead className="bg-teal-50">
             <tr>
               <th scope="col" className="w-12 px-3 py-2 text-center text-xs font-semibold text-primary-700">번호</th>
-              <th scope="col" className="w-24 px-3 py-2 text-center text-xs font-semibold text-primary-700">보험사</th>
-              <th scope="col" className="w-[28rem] px-3 py-2 text-left text-xs font-semibold text-primary-700">상품명</th>
-              <th scope="col" className="w-28 px-3 py-2 text-center text-xs font-semibold text-primary-700">가입일</th>
-              <th scope="col" className="w-20 px-3 py-2 text-center text-xs font-semibold text-primary-700">납입주기</th>
-              <th scope="col" className="w-20 px-3 py-2 text-center text-xs font-semibold text-primary-700">납입기간</th>
-              <th scope="col" className="w-20 px-3 py-2 text-center text-xs font-semibold text-primary-700">만기</th>
+              <th scope="col" className="w-28 px-3 py-2 text-center text-xs font-semibold text-primary-700">보험사</th>
+              <th scope="col" className="w-[32rem] px-3 py-2 text-left text-xs font-semibold text-primary-700">상품명</th>
+              <th scope="col" className="w-28 px-3 py-2 text-center text-xs font-semibold text-primary-700">계약일</th>
+              <th scope="col" className="w-12 px-3 py-2 text-center text-xs font-semibold text-primary-700">납입주기</th>
+              <th scope="col" className="w-12 px-3 py-2 text-center text-xs font-semibold text-primary-700">납입기간</th>
+              <th scope="col" className="w-12 px-3 py-2 text-center text-xs font-semibold text-primary-700">만기</th>
               <th scope="col" className="w-24 px-3 py-2 text-right text-xs font-semibold text-primary-700">월 보험료</th>
             </tr>
           </thead>
@@ -98,10 +119,12 @@ export default function ContractListTable({ data }) {
               const payCycle = hasContracts ? (contract.납입주기 || contract.납입방법 || '-') : '-';
               const paymentPeriod = hasContracts ? (contract.납입기간 || '-') : '-';
               const maturity = hasContracts ? (contract.만기 || contract.만기나이 || '-') : '-';
+              const contractDate = hasContracts ? (contract.계약일 || contract.가입일 || '-') : '-';
+              const displayNumber = hasContracts ? index + 1 : (contract.번호 || index + 1);
 
               return (
                 <tr key={`${contract.상품명 || 'contract'}-${index}`} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 text-sm text-gray-900 text-center align-top">{contract.번호 || index + 1}</td>
+                  <td className="px-3 py-2 text-sm text-gray-900 text-center align-top">{displayNumber}</td>
                   <td className="px-3 py-2 text-sm text-gray-700 text-center align-top">
                     {hasContracts ? (
                       <div className="company-cell">
@@ -125,7 +148,7 @@ export default function ContractListTable({ data }) {
                     )}
                   </td>
                   <td className="px-3 py-2 text-sm text-gray-700 text-center align-top">
-                    {hasContracts ? contract.가입일 || '-' : '-'}
+                    {contractDate}
                   </td>
                   <td className="px-3 py-2 text-sm text-gray-700 text-center align-top">
                     {payCycle}

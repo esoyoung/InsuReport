@@ -215,9 +215,10 @@ function parseContractList(text) {
     }
 
     contracts.push({
-      번호: rowNumber,
+      번호: Number(rowNumber),
       보험사: company || '',
       상품명: product || '',
+      계약일: date,
       가입일: date,
       납입주기: payCycle || '-',
       납입기간: paymentPeriod || '-',
