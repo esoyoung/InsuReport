@@ -3,6 +3,7 @@ import { useInsuranceStore } from '../store/insuranceStore';
 import { parsePDF } from '../utils/pdfParser';
 import { validateContractsWithAI, isAIValidationAvailable } from '../utils/aiValidator';
 import { compressPDF, isPDFTooLarge, formatFileSize } from '../utils/pdfCompressor';
+import { uploadToR2, validateContractsWithR2, shouldUseR2 } from '../utils/storageUploader';
 
 function FileUploader() {
   const { setLoading, setError, setParsedData, isLoading, error } = useInsuranceStore();
@@ -22,9 +23,58 @@ function FileUploader() {
     setValidationStatus(null);
 
     try {
+      // 0단계: PDF 크기 확인 및 R2 경로 결정
+      const fileSizeMB = file.size / (1024 * 1024);
+      const useR2 = shouldUseR2(file, 2.8); // 2.8MB 초과 시 R2 사용
+
+      if (useR2) {
+        console.log(`📦 대용량 PDF 감지 (${fileSizeMB.toFixed(2)}MB > 2.8MB), R2 경로 사용`);
+        
+        try {
+          // 1단계: R2에 업로드
+          setValidationStatus(`R2 업로드 중... (${formatFileSize(file.size)})`);
+          const { fileKey } = await uploadToR2(file);
+          
+          // 2단계: 규칙 기반 파싱 (로컬에서)
+          console.log('📄 규칙 기반 PDF 파싱 시작...');
+          setValidationStatus('PDF 분석 중...');
+          const data = await parsePDF(file);
+          console.log('✅ 규칙 기반 파싱 완료');
+
+          // 3단계: R2 기반 AI 검증
+          if (isAIValidationAvailable()) {
+            console.log('🤖 R2 기반 AI 검증 시작...');
+            setValidationStatus('AI 검증 중 (대용량 PDF)...');
+            
+            const validationResult = await validateContractsWithR2(fileKey, data);
+            
+            console.log('✅ AI 검증 완료');
+            setValidationStatus(
+              `AI 검증 완료: ${validationResult.corrections?.length || 0}건 수정`
+            );
+            
+            if (validationResult.corrections?.length > 0) {
+              console.log('📝 AI 수정 사항:', validationResult.corrections);
+            }
+            
+            setParsedData(validationResult.data);
+          } else {
+            setParsedData(data);
+          }
+          
+          return; // R2 경로 완료
+          
+        } catch (r2Error) {
+          console.error('❌ R2 처리 실패:', r2Error);
+          console.log('⚠️ 압축 경로로 fallback...');
+          // R2 실패 시 압축 경로로 fallback
+        }
+      }
+
+      // 일반 경로: 압축 + 직접 업로드
       // 0단계: PDF 압축 (필요한 경우)
       if (isPDFTooLarge(file, 2.5)) {
-        console.log('📦 0단계: PDF 크기가 큽니다. 압축 시도...');
+        console.log('📦 PDF 크기가 큽니다. 압축 시도...');
         setValidationStatus(`PDF 압축 중... (${formatFileSize(file.size)})`);
         
         const compressionResult = await compressPDF(file, 2.0);
@@ -41,14 +91,14 @@ function FileUploader() {
       }
 
       // 1단계: 규칙 기반 파싱
-      console.log('📄 1단계: 규칙 기반 PDF 파싱 시작...');
+      console.log('📄 규칙 기반 PDF 파싱 시작...');
       setValidationStatus('PDF 분석 중...');
       const data = await parsePDF(file);
       console.log('✅ 규칙 기반 파싱 완료');
 
       // 2단계: AI 검증 (활성화된 경우)
       if (isAIValidationAvailable()) {
-        console.log('🤖 2단계: AI 검증 시작...');
+        console.log('🤖 AI 검증 시작...');
         setValidationStatus('AI 검증 중...');
         
         const validationResult = await validateContractsWithAI(file, data);
