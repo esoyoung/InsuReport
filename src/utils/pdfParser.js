@@ -27,20 +27,27 @@ const KNOWN_COMPANY_MAP = new Map(
   KNOWN_COMPANIES.map((name) => [name.replace(/\s+/g, ''), name])
 );
 
+const COMPANY_KEYWORD_PATTERN = /(생명|손해보험|화재|라이프|보험)$/;
+
 function extractCompanyAndProduct(tokens) {
   if (!tokens || tokens.length === 0) {
     return { company: '', product: '' };
   }
 
-  const maxLength = Math.min(3, tokens.length);
+  const cleanedTokens = tokens.filter((token) => token && token.trim().length > 0);
+  if (cleanedTokens.length === 0) {
+    return { company: '', product: '' };
+  }
+
+  const maxLength = Math.min(3, cleanedTokens.length);
 
   for (let length = maxLength; length >= 1; length -= 1) {
-    const candidateTokens = tokens.slice(0, length);
+    const candidateTokens = cleanedTokens.slice(0, length);
     const normalizedCandidate = candidateTokens.join('').replace(/\s+/g, '');
 
     if (KNOWN_COMPANY_MAP.has(normalizedCandidate)) {
       const companyName = KNOWN_COMPANY_MAP.get(normalizedCandidate);
-      const remainderTokens = tokens.slice(length);
+      const remainderTokens = cleanedTokens.slice(length);
       return {
         company: companyName,
         product: remainderTokens.join(' ').trim()
@@ -48,10 +55,44 @@ function extractCompanyAndProduct(tokens) {
     }
   }
 
-  const [firstToken, ...remainder] = tokens;
+  for (let start = 1; start < cleanedTokens.length; start += 1) {
+    if (/^\(무/.test(cleanedTokens[start])) continue;
+    const windowMax = Math.min(3, cleanedTokens.length - start);
+    for (let length = windowMax; length >= 1; length -= 1) {
+      const candidateTokens = cleanedTokens.slice(start, start + length);
+      const normalizedCandidate = candidateTokens.join('').replace(/\s+/g, '');
+      if (KNOWN_COMPANY_MAP.has(normalizedCandidate)) {
+        const companyName = KNOWN_COMPANY_MAP.get(normalizedCandidate);
+        const productTokens = [
+          ...cleanedTokens.slice(0, start),
+          ...cleanedTokens.slice(start + length)
+        ];
+        return {
+          company: companyName,
+          product: productTokens.join(' ').trim()
+        };
+      }
+    }
+  }
+
+  const [firstToken, ...restTokens] = cleanedTokens;
+  if (/^\(무/.test(firstToken)) {
+    return {
+      company: '',
+      product: cleanedTokens.join(' ').trim()
+    };
+  }
+
+  if (!COMPANY_KEYWORD_PATTERN.test(firstToken)) {
+    return {
+      company: '',
+      product: cleanedTokens.join(' ').trim()
+    };
+  }
+
   return {
     company: firstToken,
-    product: remainder.join(' ').trim()
+    product: restTokens.join(' ').trim()
   };
 }
 
@@ -177,7 +218,10 @@ function parseContractList(text) {
     const { company, product } = extractCompanyAndProduct(beforeTokens);
 
     const originalAfterTokens = afterDate.split(' ').filter(Boolean);
-    const workingTokens = [...originalAfterTokens];
+    const interestRateMatch = afterDate.match(/(\d+(?:\.\d+)?)%/);
+    const interestRate = interestRateMatch ? `${interestRateMatch[1]}%` : '';
+
+    const workingTokens = originalAfterTokens.filter((token) => !/%/.test(token));
 
     let payCycle = (workingTokens.shift() || '').trim();
     let paymentPeriod = (workingTokens.shift() || '').trim();
@@ -220,6 +264,7 @@ function parseContractList(text) {
       상품명: product || '',
       계약일: date,
       가입일: date,
+      가입당시금리: interestRate || '',
       납입주기: payCycle || '-',
       납입기간: paymentPeriod || '-',
       만기: maturity || '-',
@@ -277,7 +322,7 @@ function parseDiagnosisStatus(text) {
   
   for (const dambo of damboItems) {
     const escapedDambo = dambo.replace(/[()]/g, '\\$&');
-    const damboPattern = new RegExp(`${escapedDambo}\\s+([\\d,억만천]+)\\s+([\\d,억만천]+)\\s+([-+]?[\\d,억만천]+)\\s+(충분|부족|미가입)`);
+    const damboPattern = new RegExp(`${escapedDambo}\\s+([\\d.,억만천]+)\\s+([\\d.,억만천]+)\\s+([-+]?[\\d.,억만천]+)\\s+(충분|부족|미가입)`);
     const match = sectionText.match(damboPattern);
     
     if (match) {
