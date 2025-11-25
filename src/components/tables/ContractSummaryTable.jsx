@@ -9,29 +9,6 @@ const sanitizeNumber = (value) => {
   return Number(cleaned) || 0;
 };
 
-const aggregateCompanyStats = (contracts = []) => {
-  const statsMap = new Map();
-
-  contracts.forEach((contract) => {
-    const key = contract.보험사?.trim() || '기타';
-    const premium = sanitizeNumber(contract.월보험료);
-
-    if (!statsMap.has(key)) {
-      statsMap.set(key, {
-        보험사: key,
-        계약건수: 0,
-        월보험료: 0,
-      });
-    }
-
-    const target = statsMap.get(key);
-    target.계약건수 += 1;
-    target.월보험료 += premium;
-  });
-
-  return Array.from(statsMap.values()).sort((a, b) => b.월보험료 - a.월보험료);
-};
-
 const sumValuesByKeyword = (source, keyword) => {
   if (!source || !keyword) return 0;
 
@@ -78,11 +55,13 @@ export default function ContractSummaryTable({ data }) {
   const 고객정보 = insuranceData.고객정보 || {};
   const contracts = insuranceData.계약리스트 || [];
   const contractCount = 고객정보.계약수 || contracts.length || 0;
-  const companyStats = aggregateCompanyStats(contracts);
-  const totalPremiumFromContracts = companyStats.reduce((sum, item) => sum + item.월보험료, 0);
-  const customerPremium = sanitizeNumber(고객정보.월보험료);
-  const totalMonthlyPremium = totalPremiumFromContracts > 0 ? totalPremiumFromContracts : customerPremium;
-  const highestPremiumCompany = companyStats[0];
+  const totalMonthlyPremiumFromContracts = contracts.reduce(
+    (sum, contract) => sum + sanitizeNumber(contract.월보험료),
+    0
+  );
+  const customerMonthlyPremium = sanitizeNumber(고객정보.월보험료);
+  const totalMonthlyPremium =
+    totalMonthlyPremiumFromContracts > 0 ? totalMonthlyPremiumFromContracts : customerMonthlyPremium;
 
   const completedPremiumFromContracts = sumValuesByKeyword(contracts, '납입완료');
   const completedPremiumFromCustomer = sumValuesByKeyword(고객정보, '납입완료');
@@ -96,14 +75,14 @@ export default function ContractSummaryTable({ data }) {
 
   const summaryCards = [
     {
-      label: '총 계약 수',
+      label: '총계약건수',
       value: `${contractCount}건`,
       helper: '고객 보유 전체 계약 기준',
     },
     {
-      label: '보험료 총합',
-      value: `${currencyFormatter.format(combinedPremiumTotal || 0)}원`,
-      helper: '월 + 납입완료 + 납입예정 보험료',
+      label: '월보험료 총액',
+      value: `${currencyFormatter.format(totalMonthlyPremium || 0)}원`,
+      helper: '현재 납입 중인 월 보험료 합계',
     },
     {
       label: '납입완료 보험료',
@@ -119,22 +98,11 @@ export default function ContractSummaryTable({ data }) {
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-primary-700">계약현황 요약</h2>
-          <p className="text-sm text-gray-500">
-            최근 업로드된 KB 보장분석 리포트를 기준으로 작성된 요약 정보입니다.
-          </p>
-        </div>
-        {highestPremiumCompany ? (
-          <div className="rounded-lg bg-primary-50 px-4 py-2 text-sm text-primary-700 border border-primary-100">
-            <span className="font-semibold">주요 보험사</span>{' '}
-            {highestPremiumCompany.보험사} ({currencyFormatter.format(highestPremiumCompany.월보험료)}원)
-          </div>
-        ) : null}
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <h2 className="text-2xl font-semibold text-gray-900">계약현황 요약</h2>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 print:grid-cols-4">
         {summaryCards.map((card) => (
           <div key={card.label} className="rounded-lg border border-gray-200 bg-gray-50/60 p-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{card.label}</p>
@@ -145,7 +113,7 @@ export default function ContractSummaryTable({ data }) {
       </div>
 
       <p className="mt-4 text-xs text-gray-500">
-        ※ 보험료 총합은 월 보험료와 납입완료·납입예정 보험료를 모두 포함하여 산출됩니다.
+        ※ 총 보험료(월 + 납입완료 + 납입예정) 합계: {currencyFormatter.format(combinedPremiumTotal || 0)}원
       </p>
     </div>
   );

@@ -5,6 +5,14 @@ import ContractListTable from './tables/ContractListTable';
 import CoverageStatusTable from './tables/CoverageStatusTable';
 import DiagnosisTable from './tables/DiagnosisTable';
 
+const sanitizeNumericValue = (value) => {
+  if (typeof value === 'number') return value;
+  if (!value) return 0;
+  const cleaned = String(value).replace(/[^0-9.-]/g, '');
+  const numeric = Number(cleaned);
+  return Number.isNaN(numeric) ? 0 : numeric;
+};
+
 function ReportViewer() {
   const { parsedData, reset } = useInsuranceStore();
 
@@ -20,29 +28,39 @@ function ReportViewer() {
   }
 
   const { 고객정보 } = parsedData;
+  const contracts = parsedData.계약리스트 || [];
+  const contractCount = 고객정보.계약수 || contracts.length || 0;
+  const totalMonthlyPremiumFromContracts = contracts.reduce(
+    (sum, contract) => sum + sanitizeNumericValue(contract.월보험료),
+    0
+  );
+  const monthlyPremiumValue =
+    totalMonthlyPremiumFromContracts > 0
+      ? totalMonthlyPremiumFromContracts
+      : sanitizeNumericValue(고객정보.월보험료);
+  const monthlyPremiumDisplay = `${Math.max(0, monthlyPremiumValue).toLocaleString('ko-KR')}원`;
+  const genderShort = 고객정보.성별 ? String(고객정보.성별).replace(/자$/, '') : '';
+  const ageLabel = 고객정보.나이 ? `${고객정보.나이}세` : '';
+  const ageGenderLabel = [ageLabel, genderShort].filter(Boolean).join(', ');
 
   return (
     <div>
       {/* 컨트롤 패널 */}
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs font-semibold tracking-wide text-primary-700 uppercase mb-1">
-            고객 정보
-          </p>
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-3xl font-extrabold text-gray-900 leading-tight">
             {고객정보.이름}님의 보장분석 리포트
-          </h2>
-          <div className="mt-2 flex flex-wrap gap-3 text-sm text-gray-600">
-            <span>{고객정보.나이}세</span>
-            <span className="text-gray-300">|</span>
-            <span>{고객정보.성별}</span>
-            <span className="text-gray-300">|</span>
-            <span>월 보험료 {(고객정보.월보험료 || 0).toLocaleString()}원</span>
-            {고객정보.계약수 ? (
-              <>
-                <span className="text-gray-300">|</span>
-                <span>총 계약 {고객정보.계약수}건</span>
-              </>
+          </h1>
+          <div className="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-2 text-sm text-gray-600">
+            <div className="flex items-baseline gap-2 text-lg font-semibold text-gray-900">
+              <span>{고객정보.이름}님</span>
+              {ageGenderLabel ? (
+                <span className="text-xs font-medium text-gray-500 leading-none">({ageGenderLabel})</span>
+              ) : null}
+            </div>
+            <span className="text-sm text-gray-600">월 보험료 {monthlyPremiumDisplay}</span>
+            {contractCount ? (
+              <span className="text-sm text-gray-600">총 계약 {contractCount}건</span>
             ) : null}
           </div>
         </div>
