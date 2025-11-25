@@ -24,22 +24,36 @@ function ReportViewer() {
   return (
     <div>
       {/* 컨트롤 패널 */}
-      <div className="mb-6 flex justify-between items-center no-print">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">
+          <p className="text-xs font-semibold tracking-wide text-primary-700 uppercase mb-1">
+            고객 정보
+          </p>
+          <h2 className="text-2xl font-bold text-gray-900">
             {고객정보.이름}님의 보장분석 리포트
           </h2>
-          <p className="text-sm text-gray-600 mt-1">
-            {고객정보.나이}세 · {고객정보.성별} · 
-            월 보험료: {(고객정보.월보험료 || 0).toLocaleString()}원
-          </p>
+          <div className="mt-2 flex flex-wrap gap-3 text-sm text-gray-600">
+            <span>{고객정보.나이}세</span>
+            <span className="text-gray-300">|</span>
+            <span>{고객정보.성별}</span>
+            <span className="text-gray-300">|</span>
+            <span>월 보험료 {(고객정보.월보험료 || 0).toLocaleString()}원</span>
+            {고객정보.계약수 ? (
+              <>
+                <span className="text-gray-300">|</span>
+                <span>총 계약 {고객정보.계약수}건</span>
+              </>
+            ) : null}
+          </div>
         </div>
-        <button
-          onClick={reset}
-          className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          🔄 다시 업로드
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={reset}
+            className="no-print px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            🔄 다시 업로드
+          </button>
+        </div>
       </div>
 
       {/* 리포트 섹션들 */}

@@ -265,7 +265,7 @@ function parseDiagnosisStatus(text) {
 }
 
 // 메인 파싱 함수
-export async function parseKBInsurancePDF(file) {
+export async function parsePDF(file) {
   try {
     console.log('📄 PDF 파싱 시작...');
     
@@ -277,17 +277,6 @@ export async function parseKBInsurancePDF(file) {
     
     // Y 좌표 기반 텍스트 추출
     const fullText = await extractTextWithCoordinates(pdf);
-    
-    // 디버깅용 텍스트 다운로드
-    const blob = new Blob([fullText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pdf_text_${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-    
-    console.log('📥 추출된 텍스트 다운로드 완료');
     
     // 각 섹션 파싱
     const 고객정보 = parseCustomerInfo(fullText);
@@ -311,3 +300,5 @@ export async function parseKBInsurancePDF(file) {
     throw new Error(`PDF 파싱 실패: ${error.message}`);
   }
 }
+
+export const parseKBInsurancePDF = parsePDF;
