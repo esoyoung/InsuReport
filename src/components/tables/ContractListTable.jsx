@@ -34,20 +34,13 @@ const formatCompanyLines = (rawName) => {
   const normalized = String(rawName).replace(/\s+/g, '');
   if (!normalized) return ['—'];
 
+  // 8글자까지 1줄로 표시
   let truncated = normalized;
   if (truncated.length > 8) {
-    truncated = `${truncated.slice(0, 7)}…`;
+    truncated = `${truncated.slice(0, 8)}…`;
   }
 
-  if (truncated.length <= 4) {
-    return [truncated];
-  }
-
-  const breakIndex = truncated.length > 6 ? 4 : Math.ceil(truncated.length / 2);
-  const firstLine = truncated.slice(0, breakIndex);
-  const secondLine = truncated.slice(breakIndex);
-
-  return secondLine ? [firstLine, secondLine] : [firstLine];
+  return [truncated];
 };
 
 const formatProductLines = (rawName) => {
@@ -189,28 +182,28 @@ export default function ContractListTable({ data }) {
         <table className="report-table table-fixed min-w-full divide-y divide-gray-200">
           <thead className="bg-teal-50">
             <tr>
-              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ width: '3rem' }}>
+              <th scope="col" className="px-1 py-2 text-center text-primary-700 font-semibold align-middle" style={{ width: '2.5rem' }}>
                 번호
               </th>
-              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ width: '6rem' }}>
+              <th scope="col" className="px-1 py-2 text-left text-primary-700 font-semibold align-middle" style={{ width: '5rem' }}>
                 보험사
               </th>
-              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ minWidth: '28rem' }}>
+              <th scope="col" className="px-1 py-2 text-left text-primary-700 font-semibold align-middle" style={{ minWidth: '20rem' }}>
                 상품명
               </th>
-              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ width: '4.75rem' }}>
+              <th scope="col" className="px-1 py-2 text-center text-primary-700 font-semibold align-middle" style={{ width: '4.75rem' }}>
                 계약일
               </th>
-              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ width: '3rem' }}>
+              <th scope="col" className="px-1 py-2 text-center text-primary-700 font-semibold align-middle" style={{ width: '3rem' }}>
                 납입주기
               </th>
-              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ width: '3rem' }}>
+              <th scope="col" className="px-1 py-2 text-center text-primary-700 font-semibold align-middle" style={{ width: '3rem' }}>
                 납입기간
               </th>
-              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ width: '3rem' }}>
+              <th scope="col" className="px-1 py-2 text-center text-primary-700 font-semibold align-middle" style={{ width: '3rem' }}>
                 만기
               </th>
-              <th scope="col" className="px-2 text-right text-primary-700 font-semibold" style={{ width: '6.5rem' }}>
+              <th scope="col" className="px-1 py-2 text-right text-primary-700 font-semibold align-middle" style={{ width: '7rem' }}>
                 월 보험료
               </th>
             </tr>
@@ -236,29 +229,29 @@ export default function ContractListTable({ data }) {
               const productLines = hasContracts ? formatProductLines(contract.상품명) : ['—'];
 
               return (
-                <tr key={`${contract.상품명 || 'contract'}-${index}`} className="hover:bg-gray-50 align-top">
-                  <td className="px-2 text-gray-900">
+                <tr key={`${contract.상품명 || 'contract'}-${index}`} className="hover:bg-gray-50 align-middle">
+                  <td className="px-1 py-2 text-gray-900 align-middle">
                     {renderCellContent(displayNumber, { align: 'center' })}
                   </td>
-                  <td className="px-2 text-gray-700">
-                    {renderCellContent(companyLines, { align: 'center' })}
+                  <td className="px-1 py-2 text-gray-700 align-middle">
+                    {renderCellContent(companyLines, { align: 'left' })}
                   </td>
-                  <td className="px-2 text-gray-700">
-                    {renderCellContent(productLines, { align: 'center' })}
+                  <td className="px-1 py-2 text-gray-700 align-middle">
+                    {renderCellContent(productLines, { align: 'left' })}
                   </td>
-                  <td className="px-2 text-gray-700">
+                  <td className="px-1 py-2 text-gray-700 align-middle">
                     {renderCellContent(dateLines, { align: 'center' })}
                   </td>
-                  <td className="px-2 text-gray-700">
+                  <td className="px-1 py-2 text-gray-700 align-middle">
                     {renderCellContent(payCycle, { align: 'center' })}
                   </td>
-                  <td className="px-2 text-gray-700">
+                  <td className="px-1 py-2 text-gray-700 align-middle">
                     {renderCellContent(paymentPeriod, { align: 'center' })}
                   </td>
-                  <td className="px-2 text-gray-700">
+                  <td className="px-1 py-2 text-gray-700 align-middle">
                     {renderCellContent(maturity, { align: 'center' })}
                   </td>
-                  <td className="px-2 text-gray-900">
+                  <td className="px-1 py-2 text-gray-900 align-middle">
                     {renderCellContent(premiumDisplay, { align: 'right' })}
                   </td>
                 </tr>
@@ -268,10 +261,10 @@ export default function ContractListTable({ data }) {
           {hasContracts ? (
             <tfoot>
               <tr className="bg-primary-50">
-                <td colSpan={7} className="px-2 text-primary-800 font-semibold text-right">
+                <td colSpan={7} className="px-1 py-2 text-primary-800 font-semibold text-right align-middle">
                   월 보험료 합계
                 </td>
-                <td className="px-2 text-primary-800 font-semibold text-right">
+                <td className="px-1 py-2 text-primary-800 font-semibold text-right align-middle">
                   {currencyFormatter.format(totalMonthlyPremium)}원
                 </td>
               </tr>

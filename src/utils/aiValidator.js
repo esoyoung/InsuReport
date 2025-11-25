@@ -87,6 +87,7 @@ export async function validateContractsWithAI(pdfFile, parsedData) {
       data: {
         ...parsedData,
         계약리스트: result.계약리스트,
+        진단현황: result.진단현황 || parsedData.진단현황, // AI 검증된 진단현황 또는 원본 유지
       },
       corrections: result.수정사항,
       totalPremium: result.총보험료,
