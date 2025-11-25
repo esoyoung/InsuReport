@@ -54,9 +54,9 @@ export default async function handler(req, res) {
     // Gemini AI 초기화
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // Gemini 2.0 Flash 모델 설정
+    // Gemini 1.5 Flash 모델 설정 (안정적인 무료 모델)
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-1.5-flash',
       generationConfig: {
         temperature: 0.1,
         topP: 0.95,
