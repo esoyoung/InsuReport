@@ -47,7 +47,13 @@ function extractCompanyAndProduct(tokens) {
 
     if (KNOWN_COMPANY_MAP.has(normalizedCandidate)) {
       const companyName = KNOWN_COMPANY_MAP.get(normalizedCandidate);
-      const remainderTokens = cleanedTokens.slice(length);
+      let remainderTokens = cleanedTokens.slice(length);
+      
+      // 보험사 바로 뒤의 '-' 토큰 제거
+      if (remainderTokens.length > 0 && remainderTokens[0] === '—') {
+        remainderTokens = remainderTokens.slice(1);
+      }
+      
       return {
         company: companyName,
         product: remainderTokens.join(' ').trim()
@@ -63,10 +69,14 @@ function extractCompanyAndProduct(tokens) {
       const normalizedCandidate = candidateTokens.join('').replace(/\s+/g, '');
       if (KNOWN_COMPANY_MAP.has(normalizedCandidate)) {
         const companyName = KNOWN_COMPANY_MAP.get(normalizedCandidate);
-        const productTokens = [
+        let productTokens = [
           ...cleanedTokens.slice(0, start),
           ...cleanedTokens.slice(start + length)
         ];
+        
+        // 상품명에서 시작/끝의 '-' 제거
+        productTokens = productTokens.filter((token) => token !== '—');
+        
         return {
           company: companyName,
           product: productTokens.join(' ').trim()
