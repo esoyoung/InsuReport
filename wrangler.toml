@@ -1,0 +1,28 @@
+# Cloudflare Pages + Workers Configuration
+# This deploys both frontend (Pages) and backend (Workers)
+
+name = "insu-report"
+compatibility_date = "2024-11-25"
+
+# Pages configuration for Frontend
+pages_build_output_dir = "dist"
+
+# Workers configuration for Backend API
+workers_dev = false
+
+# Environment Variables
+[vars]
+ENVIRONMENT = "production"
+
+# Production environment
+[env.production]
+name = "insu-report"
+pages_build_output_dir = "dist"
+
+# Workers for API routes (automatically created by Pages)
+# API routes are handled by cloudflare-workers/src/index.js
+# Pages will serve static files from dist/
+# Workers will handle /api/* routes
+
+# Note: Cloudflare Pages automatically deploys Workers
+# when you have functions/_middleware.js or functions/api/*.js
