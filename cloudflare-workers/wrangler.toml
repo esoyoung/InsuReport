@@ -17,9 +17,12 @@ bucket_name = "insurance-pdfs"
 # Environment Variables
 [vars]
 ENVIRONMENT = "development"
+AI_MODEL = "auto"  # Options: gemini | gpt-4o | claude | auto (ensemble)
 
-# Secrets (set via: wrangler secret put GEMINI_API_KEY)
-# GEMINI_API_KEY - Google Gemini API key
+# Secrets (set via: wrangler secret put <KEY_NAME>)
+# GEMINI_API_KEY - Google Gemini API key (required)
+# OPENAI_API_KEY - OpenAI API key (optional, for GPT-4o)
+# ANTHROPIC_API_KEY - Anthropic API key (optional, for Claude)
 # These are stored securely in Cloudflare and not in this file
 
 # Routes (for production)

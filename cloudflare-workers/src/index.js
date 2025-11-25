@@ -4,8 +4,15 @@
  * Features:
  * - 5 minutes CPU time (vs Vercel 60s)
  * - Direct R2 integration
- * - Gemini API with PDF multimodal processing
+ * - Multi-Model AI: Gemini / GPT-4o / Claude / Ensemble
  */
+
+import { 
+  validateWithGemini, 
+  validateWithGPT4o, 
+  validateWithClaude, 
+  validateWithEnsemble 
+} from './ai-models.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -67,7 +74,7 @@ export default {
  * AI Validation from R2-stored PDF
  */
 async function handleAIValidationFromR2(request, env, corsHeaders) {
-  const { fileKey, parsedData } = await request.json();
+  const { fileKey, parsedData, model = 'auto' } = await request.json();
 
   if (!fileKey || !parsedData) {
     return jsonResponse({ 
@@ -75,7 +82,7 @@ async function handleAIValidationFromR2(request, env, corsHeaders) {
     }, 400, corsHeaders);
   }
 
-  console.log('🤖 AI validation request (R2):', fileKey);
+  console.log(`🤖 AI validation request (R2): ${fileKey}, model: ${model}`);
   const startTime = Date.now();
 
   // Get PDF from R2
@@ -94,8 +101,8 @@ async function handleAIValidationFromR2(request, env, corsHeaders) {
   
   console.log(`✅ PDF loaded from R2: ${pdfSizeMB}MB`);
 
-  // Call Gemini API
-  const validatedData = await callGeminiAPI(pdfBase64, parsedData, env);
+  // Call AI with selected model
+  const validatedData = await callAI(pdfBase64, parsedData, model, env);
 
   const duration = Date.now() - startTime;
   console.log(`✅ AI validation completed in ${duration}ms (${(duration/1000).toFixed(1)}s)`);
@@ -105,7 +112,8 @@ async function handleAIValidationFromR2(request, env, corsHeaders) {
     _metadata: {
       processingTime: duration,
       pdfSize: `${pdfSizeMB}MB`,
-      cpuLimit: '300000ms (5 minutes)'
+      cpuLimit: '300000ms (5 minutes)',
+      aiModel: validatedData.model || model
     }
   }, 200, corsHeaders);
 }
@@ -114,7 +122,7 @@ async function handleAIValidationFromR2(request, env, corsHeaders) {
  * AI Validation with direct PDF upload
  */
 async function handleAIValidationDirect(request, env, corsHeaders) {
-  const { pdfBase64, parsedData } = await request.json();
+  const { pdfBase64, parsedData, model = 'auto' } = await request.json();
 
   if (!pdfBase64 || !parsedData) {
     return jsonResponse({ 
@@ -122,11 +130,11 @@ async function handleAIValidationDirect(request, env, corsHeaders) {
     }, 400, corsHeaders);
   }
 
-  console.log('🤖 AI validation request (direct)');
+  console.log(`🤖 AI validation request (direct), model: ${model}`);
   const startTime = Date.now();
 
-  // Call Gemini API
-  const validatedData = await callGeminiAPI(pdfBase64, parsedData, env);
+  // Call AI with selected model
+  const validatedData = await callAI(pdfBase64, parsedData, model, env);
 
   const duration = Date.now() - startTime;
   console.log(`✅ AI validation completed in ${duration}ms (${(duration/1000).toFixed(1)}s)`);
@@ -135,7 +143,8 @@ async function handleAIValidationDirect(request, env, corsHeaders) {
     ...validatedData,
     _metadata: {
       processingTime: duration,
-      cpuLimit: '300000ms (5 minutes)'
+      cpuLimit: '300000ms (5 minutes)',
+      aiModel: validatedData.model || model
     }
   }, 200, corsHeaders);
 }
@@ -175,129 +184,28 @@ async function handlePDFUpload(request, env, corsHeaders) {
 }
 
 /**
- * Call Gemini API for AI validation
+ * Call AI with model selection
  */
-async function callGeminiAPI(pdfBase64, parsedData, env) {
-  const apiKey = env.GEMINI_API_KEY;
+async function callAI(pdfBase64, parsedData, model, env) {
+  console.log(`🔀 AI Model: ${model}`);
   
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY not configured');
+  switch (model) {
+    case 'gemini':
+      return await validateWithGemini(pdfBase64, parsedData, env);
+    
+    case 'gpt-4o':
+      return await validateWithGPT4o(pdfBase64, parsedData, env);
+    
+    case 'claude':
+      return await validateWithClaude(pdfBase64, parsedData, env);
+    
+    case 'auto':
+    case 'ensemble':
+      return await validateWithEnsemble(pdfBase64, parsedData, env);
+    
+    default:
+      throw new Error(`Unknown AI model: ${model}. Supported: gemini, gpt-4o, claude, auto, ensemble`);
   }
-
-  // Optimized prompt (same as Vercel version)
-  const prompt = `
-KB 보험 보장분석 리포트 검증 시스템. 원본 PDF에서 4개 섹션 추출 및 검증.
-
-**입력 데이터:**
-계약리스트: ${JSON.stringify(parsedData.계약리스트 || [])}
-진단현황: ${JSON.stringify(parsedData.진단현황 || [])}
-
-**추출 규칙:**
-
-A. 보유 계약 리스트
-- 보험사명, 상품명 정확 추출 (보험사: "메리츠화재", 상품명: "(무)상품명")
-- 납입상태: "납입완료"/"완납" → "완료", 그 외 → "진행중"
-- 월보험료: 완료 계약은 0, 진행중은 원본 금액
-- 계약일: YYYY-MM-DD
-- 납입주기, 납입기간, 만기, 가입당시금리 추출
-- **중요**: 완료 계약은 총보험료 합계 제외
-
-B. 진단현황
-- 12페이지 "담보별 진단현황"에서 추출
-- 권장금액, 가입금액, 부족금액(권장-가입), 상태
-- 상태: 부족(<70%), 주의(70-99%), 충분(≥100%), 미가입(0)
-
-C. 실효/해지계약
-- 섹션 있으면 추출, 없으면 []
-- 필드: 상태, 회사명, 상품명, 계약일, 납입주기, 납입기간, 만기, 월보험료
-
-D. 상품별담보
-- "상품별 가입담보상세" 섹션에서 상품별 그룹화
-- 필드: 상품명, 보험사, 계약자, 피보험자, 납입주기, 납입기간, 만기, 보험기간, 월납보험료
-- 담보목록: [{번호, 구분, 회사담보명, 신정원담보명, 가입금액}]
-
-**출력 형식 (JSON):**
-\`\`\`json
-{
-  "계약리스트": [...],
-  "실효해지계약": [...],
-  "진단현황": [...],
-  "상품별담보": [...],
-  "수정사항": [...],
-  "총보험료": 0,
-  "활성월보험료": 0
-}
-\`\`\`
-
-**주의사항:**
-- 원본 PDF 우선
-- 불확실하면 파싱 결과 유지
-- 모든 계약/담보 포함
-- 총보험료: 진행중 계약만
-- 활성월보험료: 진행중 계약만
-`;
-
-  // Gemini API request
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: 'application/pdf',
-                  data: pdfBase64,
-                },
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          topP: 0.95,
-          topK: 40,
-          maxOutputTokens: 8192,
-          responseMimeType: 'application/json',
-        },
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
-  }
-
-  const result = await response.json();
-  const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!text) {
-    throw new Error('No response from Gemini API');
-  }
-
-  // Parse JSON response
-  let validatedData;
-  try {
-    validatedData = JSON.parse(text);
-  } catch (parseError) {
-    // Try to extract JSON from markdown code block
-    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const jsonText = jsonMatch[1] || jsonMatch[0];
-      validatedData = JSON.parse(jsonText);
-    } else {
-      throw new Error('Failed to parse AI response as JSON');
-    }
-  }
-
-  return validatedData;
 }
 
 /**
