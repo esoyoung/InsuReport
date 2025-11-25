@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'GEMINI_API_KEY가 설정되지 않았습니다' });
   }
 
-  const model = 'gemini-1.5-flash';  // 안정적인 무료 모델
+  const model = 'gemini-1.5-flash-latest';  // 안정적인 무료 모델
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const prompt = `다음은 보험 보장분석 PDF에서 추출한 텍스트입니다. 이 내용을 정확하게 분석하여 JSON 형식으로 반환해주세요.
