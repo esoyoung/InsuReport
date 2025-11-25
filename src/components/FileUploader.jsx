@@ -1,9 +1,11 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useInsuranceStore } from '../store/insuranceStore';
 import { parsePDF } from '../utils/pdfParser';
+import { validateContractsWithAI, isAIValidationAvailable } from '../utils/aiValidator';
 
 function FileUploader() {
   const { setLoading, setError, setParsedData, isLoading, error } = useInsuranceStore();
+  const [validationStatus, setValidationStatus] = useState(null);
 
   const handleFileUpload = useCallback(async (event) => {
     const file = event.target.files?.[0];
@@ -16,10 +18,43 @@ function FileUploader() {
 
     setLoading(true);
     setError(null);
+    setValidationStatus(null);
 
     try {
+      // 1단계: 규칙 기반 파싱
+      console.log('📄 1단계: 규칙 기반 PDF 파싱 시작...');
       const data = await parsePDF(file);
-      setParsedData(data);
+      console.log('✅ 규칙 기반 파싱 완료');
+
+      // 2단계: AI 검증 (활성화된 경우)
+      if (isAIValidationAvailable()) {
+        console.log('🤖 2단계: AI 검증 시작...');
+        setValidationStatus('AI 검증 중...');
+        
+        const validationResult = await validateContractsWithAI(file, data);
+        
+        if (validationResult.validated) {
+          console.log('✅ AI 검증 완료');
+          setValidationStatus(
+            `AI 검증 완료: ${validationResult.corrections?.length || 0}건 수정`
+          );
+          
+          // 수정 사항 로그
+          if (validationResult.corrections?.length > 0) {
+            console.log('📝 AI 수정 사항:', validationResult.corrections);
+          }
+          
+          // AI가 검증한 데이터 사용
+          setParsedData(validationResult.data);
+        } else {
+          console.warn('⚠️ AI 검증 실패, 규칙 기반 결과 사용');
+          setValidationStatus('AI 검증 실패 (규칙 기반 결과 사용)');
+          setParsedData(data);
+        }
+      } else {
+        console.log('ℹ️ AI 검증 비활성화, 규칙 기반 결과 사용');
+        setParsedData(data);
+      }
     } catch (err) {
       setError(`파일 파싱 중 오류가 발생했습니다: ${err.message}`);
       console.error('PDF 파싱 오류:', err);
@@ -98,6 +133,13 @@ function FileUploader() {
           <p className="text-xs text-gray-500 mt-4">
             지원 형식: PDF (최대 50MB)
           </p>
+
+          {/* 검증 상태 메시지 */}
+          {validationStatus && !error && (
+            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-700">🤖 {validationStatus}</p>
+            </div>
+          )}
 
           {/* 에러 메시지 */}
           {error && (

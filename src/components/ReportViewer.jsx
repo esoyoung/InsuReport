@@ -2,7 +2,6 @@ import React from 'react';
 import { useInsuranceStore } from '../store/insuranceStore';
 import ContractSummaryTable from './tables/ContractSummaryTable';
 import ContractListTable from './tables/ContractListTable';
-import CoverageStatusTable from './tables/CoverageStatusTable';
 import DiagnosisTable from './tables/DiagnosisTable';
 
 const sanitizeNumericValue = (value) => {
@@ -81,17 +80,12 @@ function ReportViewer() {
           <ContractSummaryTable data={parsedData} />
         </section>
 
-        {/* 2. 전체 계약 리스트 */}
+        {/* 2. 보유 계약 리스트 */}
         <section className="page-break">
           <ContractListTable data={parsedData} />
         </section>
 
-        {/* 3. 담보별 현황 */}
-        <section className="page-break">
-          <CoverageStatusTable data={parsedData} />
-        </section>
-
-        {/* 4. 담보별 진단현황 */}
+        {/* 3. 담보별 진단현황 */}
         <section className="page-break">
           <DiagnosisTable data={parsedData} />
         </section>

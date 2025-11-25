@@ -2,14 +2,15 @@ import React from 'react';
 
 const currencyFormatter = new Intl.NumberFormat('ko-KR');
 
-const sanitizeNumber = (value) => {
-  if (typeof value === 'number') return value;
-  if (!value) return 0;
-  const cleaned = String(value).replace(/[^0-9.-]/g, '');
-  return Number(cleaned) || 0;
-};
+const classNames = (...classes) => classes.filter(Boolean).join(' ');
 
-const DEFAULT_ROW_COUNT = 6;
+const sanitizeNumber = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value === null || value === undefined) return 0;
+  const cleaned = String(value).replace(/[^0-9.-]/g, '');
+  const numeric = Number(cleaned);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
 
 const parseDateValue = (value) => {
   if (!value) return 0;
@@ -18,61 +19,140 @@ const parseDateValue = (value) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
-const formatCompanyName = (rawName) => {
-  if (!rawName) return ['-'];
+const DEFAULT_ROW_COUNT = 6;
+
+const hasMeaningfulText = (value) => {
+  if (value === null || value === undefined) return false;
+  return String(value).trim().length > 0;
+};
+
+const formatCompanyLines = (rawName) => {
+  if (!hasMeaningfulText(rawName)) {
+    return ['—'];
+  }
 
   const normalized = String(rawName).replace(/\s+/g, '');
-  if (!normalized) return ['-'];
+  if (!normalized) return ['—'];
 
-  let base = normalized;
-  let overflow = false;
-
-  if (base.length > 8) {
-    base = base.slice(0, 8);
-    overflow = true;
+  let truncated = normalized;
+  if (truncated.length > 8) {
+    truncated = `${truncated.slice(0, 7)}…`;
   }
 
-  if (base.length <= 5) {
-    return [base];
+  if (truncated.length <= 4) {
+    return [truncated];
   }
 
-  const firstLine = base.slice(0, 5);
-  let secondLine = base.slice(5);
+  const breakIndex = truncated.length > 6 ? 4 : Math.ceil(truncated.length / 2);
+  const firstLine = truncated.slice(0, breakIndex);
+  const secondLine = truncated.slice(breakIndex);
 
-  if (overflow) {
-    secondLine = `${secondLine}…`;
+  return secondLine ? [firstLine, secondLine] : [firstLine];
+};
+
+const formatProductLines = (rawName) => {
+  if (!hasMeaningfulText(rawName)) return ['—'];
+
+  const trimmed = String(rawName).trim();
+  if (trimmed.length <= 28) {
+    return [trimmed];
   }
 
-  return [firstLine, secondLine];
+  const firstBreakCandidate = trimmed.lastIndexOf(' ', 28);
+  const breakIndex = firstBreakCandidate > 12 ? firstBreakCandidate : 28;
+  const firstLine = trimmed.slice(0, breakIndex).trim();
+  let secondLine = trimmed.slice(firstLine.length).trim();
+
+  if (secondLine.length > 32) {
+    secondLine = `${secondLine.slice(0, 31).trim()}…`;
+  }
+
+  return secondLine ? [firstLine, secondLine] : [firstLine];
+};
+
+const formatContractDateLines = (date, rate) => {
+  const normalizedDate = hasMeaningfulText(date) ? String(date).replace(/[.]/g, '-') : '—';
+  let normalizedRate = hasMeaningfulText(rate) ? String(rate).trim() : '';
+
+  if (normalizedRate && !/%$/.test(normalizedRate)) {
+    normalizedRate = `${normalizedRate}%`;
+  }
+
+  if (!normalizedRate) {
+    return [normalizedDate];
+  }
+
+  return [normalizedDate, normalizedRate];
 };
 
 const getMonthlyPremiumDisplay = (value, hasContracts) => {
-  if (!hasContracts) return '-';
+  if (!hasContracts) return '—';
   const numeric = sanitizeNumber(value);
   return numeric > 0 ? `${currencyFormatter.format(numeric)}원` : '0원';
+};
+
+const renderCellContent = (content, { align = 'left', fallback = '—' } = {}) => {
+  const rawLines = Array.isArray(content)
+    ? content
+    : hasMeaningfulText(content)
+      ? [content]
+      : [fallback];
+
+  const normalizedLines = rawLines
+    .flatMap((line) => {
+      if (line === null || line === undefined) return [fallback];
+      return String(line)
+        .split('\n')
+        .map((part) => (hasMeaningfulText(part) ? part.trim() : fallback));
+    })
+    .filter((line) => line !== '');
+
+  const effectiveLines =
+    normalizedLines.length > 0 ? normalizedLines.slice(0, 2) : [fallback];
+
+  const hasMultiline = effectiveLines.length > 1;
+
+  return (
+    <div
+      className={classNames(
+        'cell-content',
+        hasMultiline ? 'multiline' : 'single-line',
+        align === 'center' && 'center',
+        align === 'right' && 'right'
+      )}
+    >
+      {effectiveLines.map((line, index) => (
+        <span key={index}>{line}</span>
+      ))}
+    </div>
+  );
 };
 
 export default function ContractListTable({ data }) {
   const insuranceData = data || {};
   const contractList = insuranceData.계약리스트 || [];
   const hasContracts = contractList.length > 0;
+
   const sortedContracts = hasContracts
     ? [...contractList].sort((a, b) => {
         const dateB = parseDateValue(b?.계약일 || b?.가입일);
         const dateA = parseDateValue(a?.계약일 || a?.가입일);
 
-        if (dateB !== dateA) {
-          return dateB - dateA;
-        }
+        if (dateB !== dateA) return dateB - dateA;
 
         const numberB = Number.isFinite(Number(b?.번호)) ? Number(b.번호) : 0;
         const numberA = Number.isFinite(Number(a?.번호)) ? Number(a.번호) : 0;
+
         return numberA - numberB;
       })
     : [];
+
   const contracts = hasContracts
     ? sortedContracts
-    : Array.from({ length: DEFAULT_ROW_COUNT }, (_, index) => ({ __placeholder: true, 번호: index + 1 }));
+    : Array.from({ length: DEFAULT_ROW_COUNT }, (_, index) => ({
+        __placeholder: true,
+        번호: index + 1,
+      }));
 
   if (!insuranceData.고객정보 && !hasContracts) {
     return (
@@ -83,84 +163,103 @@ export default function ContractListTable({ data }) {
     );
   }
 
-  const totalMonthlyPremium = contractList.reduce((sum, contract) => sum + sanitizeNumber(contract.월보험료), 0);
+  const totalMonthlyPremium = contractList.reduce(
+    (sum, contract) => sum + sanitizeNumber(contract.월보험료),
+    0
+  );
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-primary-700">보유 계약 리스트</h2>
-          <p className="text-sm text-gray-500">KB 보장분석 리포트의 보유 계약 리스트를 기반으로 정리했습니다.</p>
+          <h2 className="text-2xl font-semibold text-gray-900">보유 계약 리스트</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            KB 보장분석 리포트의 보유 계약 리스트를 기반으로 정리했습니다.
+          </p>
         </div>
         {hasContracts ? (
-          <div className="rounded-lg bg-primary-50 px-4 py-2 text-sm text-primary-700 border border-primary-100">
-            월 보험료 합계 {currencyFormatter.format(totalMonthlyPremium)}원
+          <div className="rounded-lg bg-primary-50 px-4 py-2 border border-primary-100">
+            <span className="text-sm text-primary-700">월 보험료 합계 </span>
+            <span className="premium-total-value">{currencyFormatter.format(totalMonthlyPremium)}원</span>
           </div>
         ) : null}
       </div>
 
       <div className="mt-4 overflow-x-auto">
-        <table className="min-w-full table-fixed divide-y divide-gray-200">
+        <table className="report-table table-fixed min-w-full divide-y divide-gray-200">
           <thead className="bg-teal-50">
             <tr>
-              <th scope="col" className="w-12 px-3 py-2 text-center text-xs font-semibold text-primary-700">번호</th>
-              <th scope="col" className="w-28 px-3 py-2 text-center text-xs font-semibold text-primary-700">보험사</th>
-              <th scope="col" className="w-[32rem] px-3 py-2 text-left text-xs font-semibold text-primary-700">상품명</th>
-              <th scope="col" className="w-28 px-3 py-2 text-center text-xs font-semibold text-primary-700">계약일</th>
-              <th scope="col" className="w-12 px-3 py-2 text-center text-xs font-semibold text-primary-700">납입주기</th>
-              <th scope="col" className="w-12 px-3 py-2 text-center text-xs font-semibold text-primary-700">납입기간</th>
-              <th scope="col" className="w-12 px-3 py-2 text-center text-xs font-semibold text-primary-700">만기</th>
-              <th scope="col" className="w-24 px-3 py-2 text-right text-xs font-semibold text-primary-700">월 보험료</th>
+              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ width: '3rem' }}>
+                번호
+              </th>
+              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ width: '6rem' }}>
+                보험사
+              </th>
+              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ minWidth: '28rem' }}>
+                상품명
+              </th>
+              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ width: '4.75rem' }}>
+                계약일
+              </th>
+              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ width: '3rem' }}>
+                납입주기
+              </th>
+              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ width: '3rem' }}>
+                납입기간
+              </th>
+              <th scope="col" className="px-2 text-center text-primary-700 font-semibold" style={{ width: '3rem' }}>
+                만기
+              </th>
+              <th scope="col" className="px-2 text-right text-primary-700 font-semibold" style={{ width: '6.5rem' }}>
+                월 보험료
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
             {contracts.map((contract, index) => {
+              const displayNumber = hasContracts ? index + 1 : contract.번호 || index + 1;
               const premiumDisplay = getMonthlyPremiumDisplay(contract.월보험료, hasContracts);
-              const payCycle = hasContracts ? (contract.납입주기 || contract.납입방법 || '-') : '-';
-              const paymentPeriod = hasContracts ? (contract.납입기간 || '-') : '-';
-              const maturity = hasContracts ? (contract.만기 || contract.만기나이 || '-') : '-';
-              const contractDate = hasContracts ? (contract.계약일 || contract.가입일 || '-') : '-';
-              const displayNumber = hasContracts ? index + 1 : (contract.번호 || index + 1);
+              const payCycle = hasContracts ? (contract.납입주기 || contract.납입방법 || '-') : '—';
+              const paymentPeriod = hasContracts ? (contract.납입기간 || '-') : '—';
+              const maturity = hasContracts ? (contract.만기 || contract.만기나이 || '-') : '—';
+              const contractDate = hasContracts ? (contract.계약일 || contract.가입일 || '—') : '—';
+              const rawRate = hasContracts
+                ? contract.가입당시금리 ||
+                  contract.공시이율 ||
+                  contract.적용이율 ||
+                  contract.이율 ||
+                  contract.금리 ||
+                  ''
+                : '';
+              const dateLines = formatContractDateLines(contractDate, rawRate);
+              const companyLines = hasContracts ? formatCompanyLines(contract.보험사) : ['—'];
+              const productLines = hasContracts ? formatProductLines(contract.상품명) : ['—'];
 
               return (
-                <tr key={`${contract.상품명 || 'contract'}-${index}`} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 text-sm text-gray-900 text-center align-top">{displayNumber}</td>
-                  <td className="px-3 py-2 text-sm text-gray-700 text-center align-top">
-                    {hasContracts ? (
-                      <div className="company-cell">
-                        {formatCompanyName(contract.보험사).map((line, lineIdx) => (
-                          <span key={lineIdx} className="company-cell-line">
-                            {line}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      '-'
-                    )}
+                <tr key={`${contract.상품명 || 'contract'}-${index}`} className="hover:bg-gray-50 align-top">
+                  <td className="px-2 text-gray-900">
+                    {renderCellContent(displayNumber, { align: 'center' })}
                   </td>
-                  <td className="px-3 py-2 text-sm text-gray-700 align-top">
-                    {hasContracts ? (
-                      <span className="product-cell two-line-clamp" title={contract.상품명 || ''}>
-                        {contract.상품명 || '-'}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
+                  <td className="px-2 text-gray-700">
+                    {renderCellContent(companyLines, { align: 'center' })}
                   </td>
-                  <td className="px-3 py-2 text-sm text-gray-700 text-center align-top">
-                    {contractDate}
+                  <td className="px-2 text-gray-700">
+                    {renderCellContent(productLines, { align: 'center' })}
                   </td>
-                  <td className="px-3 py-2 text-sm text-gray-700 text-center align-top">
-                    {payCycle}
+                  <td className="px-2 text-gray-700">
+                    {renderCellContent(dateLines, { align: 'center' })}
                   </td>
-                  <td className="px-3 py-2 text-sm text-gray-700 text-center align-top">
-                    {paymentPeriod}
+                  <td className="px-2 text-gray-700">
+                    {renderCellContent(payCycle, { align: 'center' })}
                   </td>
-                  <td className="px-3 py-2 text-sm text-gray-700 text-center align-top">
-                    {maturity}
+                  <td className="px-2 text-gray-700">
+                    {renderCellContent(paymentPeriod, { align: 'center' })}
                   </td>
-                  <td className="px-3 py-2 text-sm text-right text-gray-900 align-top">
-                    {premiumDisplay}
+                  <td className="px-2 text-gray-700">
+                    {renderCellContent(maturity, { align: 'center' })}
+                  </td>
+                  <td className="px-2 text-gray-900">
+                    {renderCellContent(premiumDisplay, { align: 'right' })}
                   </td>
                 </tr>
               );
@@ -169,10 +268,10 @@ export default function ContractListTable({ data }) {
           {hasContracts ? (
             <tfoot>
               <tr className="bg-primary-50">
-                <td colSpan={7} className="px-3 py-2 text-sm font-semibold text-primary-800 text-right">
+                <td colSpan={7} className="px-2 text-primary-800 font-semibold text-right">
                   월 보험료 합계
                 </td>
-                <td className="px-3 py-2 text-sm font-semibold text-right text-primary-800">
+                <td className="px-2 text-primary-800 font-semibold text-right">
                   {currencyFormatter.format(totalMonthlyPremium)}원
                 </td>
               </tr>

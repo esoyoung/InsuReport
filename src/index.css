@@ -201,6 +201,51 @@ code {
   }
 }
 
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.report-table th,
+.report-table td {
+  font-size: 9pt;
+  line-height: 1.35;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.report-table .cell-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-height: 22px;
+  font-size: inherit;
+  line-height: inherit;
+  text-align: left;
+}
+
+.report-table .cell-content.single-line {
+  white-space: nowrap;
+}
+
+.report-table .cell-content.multiline {
+  font-size: 7pt;
+  line-height: 1.2;
+  min-height: 24px;
+  letter-spacing: -0.1px;
+}
+
+.report-table .cell-content.center {
+  text-align: center;
+  align-items: center;
+}
+
+.report-table .cell-content.right {
+  text-align: right;
+  align-items: flex-end;
+}
+
 .company-cell {
   display: flex;
   flex-direction: column;
@@ -208,18 +253,25 @@ code {
   justify-content: center;
   text-align: center;
   gap: 2px;
-  min-height: 2.5rem;
+  font-size: 7pt;
+  line-height: 1.2;
+  min-height: 24px;
+  letter-spacing: -0.05px;
 }
 
 .company-cell-line {
-  line-height: 1.1;
   word-break: keep-all;
+  max-width: 100%;
 }
 
 .product-cell {
-  display: block;
-  word-break: keep-all;
-  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-align: center;
+  font-size: inherit;
+  line-height: inherit;
 }
 
 .two-line-clamp {
@@ -242,5 +294,47 @@ code {
     .contract-summary-grid {
       grid-template-columns: repeat(4, 1fr);
     }
+  }
+  
+  .premium-total-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f766e;
+  }
+  
+  .diagnosis-card-label {
+    font-size: 10pt;
+    font-weight: 500;
+    color: #6b7280;
+    margin-bottom: 4px;
+  }
+  
+  .diagnosis-card-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #111827;
+    text-align: center;
+  }
+}
+
+@media print {
+  .premium-total-value {
+    font-size: 12pt !important;
+    font-weight: 700 !important;
+    color: #0f766e !important;
+  }
+  
+  .diagnosis-card-label {
+    font-size: 8pt !important;
+    font-weight: 500 !important;
+    color: #4b5563 !important;
+    margin-bottom: 1mm !important;
+  }
+  
+  .diagnosis-card-value {
+    font-size: 14pt !important;
+    font-weight: 700 !important;
+    color: #000 !important;
+    text-align: center !important;
   }
 }

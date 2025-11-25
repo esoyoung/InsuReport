@@ -20,38 +20,89 @@ const KNOWN_COMPANIES = [
   '삼성화재', '현대해상', '메리츠화재', 'DB손해보험', 'DB손보', 'KB손해보험',
   '한화손해보험', '롯데손해보험', '흥국화재', 'MG손해보험', 'NH농협손해보험',
   '농협손해보험', '더케이손해보험', '우체국보험', '우정사업본부', 'AXA손해보험',
-  '캐롯손해보험', 'Chubb손해보험', 'BNP파리바카디프생명', 'BNP파리바카디프손해보험'
+  '캐롯손해보험', 'Chubb손해보험', 'BNP파리바카디프생명', 'BNP파리바카디프손해보험',
+  '메리츠', '메리츠생명'
 ];
 
 const KNOWN_COMPANY_MAP = new Map(
   KNOWN_COMPANIES.map((name) => [name.replace(/\s+/g, ''), name])
 );
 
+const COMPANY_KEYWORD_PATTERN = /(생명|손해보험|화재|라이프|보험)$/;
+
 function extractCompanyAndProduct(tokens) {
   if (!tokens || tokens.length === 0) {
     return { company: '', product: '' };
   }
 
-  const maxLength = Math.min(3, tokens.length);
+  // 토큰 전처리: em dash, 하이픈, 빈 토큰 제거
+  let workingTokens = tokens
+    .filter((token) => token && token.trim().length > 0)
+    .filter((token) => token !== '—' && token !== '-');
 
-  for (let length = maxLength; length >= 1; length -= 1) {
-    const candidateTokens = tokens.slice(0, length);
-    const normalizedCandidate = candidateTokens.join('').replace(/\s+/g, '');
-
-    if (KNOWN_COMPANY_MAP.has(normalizedCandidate)) {
-      const companyName = KNOWN_COMPANY_MAP.get(normalizedCandidate);
-      const remainderTokens = tokens.slice(length);
-      return {
-        company: companyName,
-        product: remainderTokens.join(' ').trim()
-      };
-    }
+  if (workingTokens.length === 0) {
+    return { company: '', product: '' };
   }
 
-  const [firstToken, ...remainder] = tokens;
+  // 전체 토큰 범위에서 보험사 탐색
+  let foundCompany = null;
+  let companyStartIndex = -1;
+  let companyLength = 0;
+
+  for (let start = 0; start < workingTokens.length; start += 1) {
+    // (무)로 시작하는 토큰은 건너뛰기
+    if (/^\(무/.test(workingTokens[start])) continue;
+
+    const windowMax = Math.min(3, workingTokens.length - start);
+    for (let length = windowMax; length >= 1; length -= 1) {
+      const candidateTokens = workingTokens.slice(start, start + length);
+      const normalizedCandidate = candidateTokens.join('').replace(/\s+/g, '');
+
+      if (KNOWN_COMPANY_MAP.has(normalizedCandidate)) {
+        foundCompany = KNOWN_COMPANY_MAP.get(normalizedCandidate);
+        companyStartIndex = start;
+        companyLength = length;
+        break;
+      }
+    }
+    if (foundCompany) break;
+  }
+
+  // 보험사를 찾은 경우
+  if (foundCompany) {
+    const productTokens = [
+      ...workingTokens.slice(0, companyStartIndex),
+      ...workingTokens.slice(companyStartIndex + companyLength)
+    ];
+    return {
+      company: foundCompany,
+      product: productTokens.join(' ').trim()
+    };
+  }
+
+  // 보험사를 찾지 못한 경우 폴백 로직
+  const [firstToken, ...restTokens] = workingTokens;
+  
+  // (무)로 시작하면 전체를 상품명으로
+  if (/^\(무/.test(firstToken)) {
+    return {
+      company: '',
+      product: workingTokens.join(' ').trim()
+    };
+  }
+
+  // 보험 관련 키워드가 없으면 전체를 상품명으로
+  if (!COMPANY_KEYWORD_PATTERN.test(firstToken)) {
+    return {
+      company: '',
+      product: workingTokens.join(' ').trim()
+    };
+  }
+
+  // 첫 토큰을 보험사로 추정
   return {
     company: firstToken,
-    product: remainder.join(' ').trim()
+    product: restTokens.join(' ').trim()
   };
 }
 
@@ -177,7 +228,10 @@ function parseContractList(text) {
     const { company, product } = extractCompanyAndProduct(beforeTokens);
 
     const originalAfterTokens = afterDate.split(' ').filter(Boolean);
-    const workingTokens = [...originalAfterTokens];
+    const interestRateMatch = afterDate.match(/(\d+(?:\.\d+)?)%/);
+    const interestRate = interestRateMatch ? `${interestRateMatch[1]}%` : '';
+
+    const workingTokens = originalAfterTokens.filter((token) => !/%/.test(token));
 
     let payCycle = (workingTokens.shift() || '').trim();
     let paymentPeriod = (workingTokens.shift() || '').trim();
@@ -220,6 +274,7 @@ function parseContractList(text) {
       상품명: product || '',
       계약일: date,
       가입일: date,
+      가입당시금리: interestRate || '',
       납입주기: payCycle || '-',
       납입기간: paymentPeriod || '-',
       만기: maturity || '-',
@@ -277,7 +332,7 @@ function parseDiagnosisStatus(text) {
   
   for (const dambo of damboItems) {
     const escapedDambo = dambo.replace(/[()]/g, '\\$&');
-    const damboPattern = new RegExp(`${escapedDambo}\\s+([\\d,억만천]+)\\s+([\\d,억만천]+)\\s+([-+]?[\\d,억만천]+)\\s+(충분|부족|미가입)`);
+    const damboPattern = new RegExp(`${escapedDambo}\\s+([\\d.,억만천]+)\\s+([\\d.,억만천]+)\\s+([-+]?[\\d.,억만천]+)\\s+(충분|부족|미가입)`);
     const match = sectionText.match(damboPattern);
     
     if (match) {
