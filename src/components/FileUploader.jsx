@@ -26,9 +26,14 @@ function FileUploader() {
       // 0단계: PDF 크기 확인 및 R2 경로 결정
       const fileSizeMB = file.size / (1024 * 1024);
       const useR2 = shouldUseR2(file, 2.8); // 2.8MB 초과 시 R2 사용
+      const skipAIForLarge = fileSizeMB > 10; // 10MB 초과 시 AI 검증 스킵 (할당량 절약)
 
       if (useR2) {
         console.log(`📦 대용량 PDF 감지 (${fileSizeMB.toFixed(2)}MB > 2.8MB), R2 경로 사용`);
+        
+        if (skipAIForLarge) {
+          console.log(`⚠️ 초대용량 PDF (${fileSizeMB.toFixed(2)}MB > 10MB), AI 검증 스킵 (할당량 절약)`);
+        }
         
         try {
           // 1단계: R2에 업로드
@@ -41,24 +46,40 @@ function FileUploader() {
           const data = await parsePDF(file);
           console.log('✅ 규칙 기반 파싱 완료');
 
-          // 3단계: R2 기반 AI 검증
-          if (isAIValidationAvailable()) {
+          // 3단계: R2 기반 AI 검증 (10MB 이하만)
+          if (isAIValidationAvailable() && !skipAIForLarge) {
             console.log('🤖 R2 기반 AI 검증 시작...');
             setValidationStatus('AI 검증 중 (대용량 PDF)...');
             
-            const validationResult = await validateContractsWithR2(fileKey, data);
-            
-            console.log('✅ AI 검증 완료');
-            setValidationStatus(
-              `AI 검증 완료: ${validationResult.corrections?.length || 0}건 수정`
-            );
-            
-            if (validationResult.corrections?.length > 0) {
-              console.log('📝 AI 수정 사항:', validationResult.corrections);
+            try {
+              const validationResult = await validateContractsWithR2(fileKey, data);
+              
+              console.log('✅ AI 검증 완료');
+              setValidationStatus(
+                `AI 검증 완료: ${validationResult.corrections?.length || 0}건 수정`
+              );
+              
+              if (validationResult.corrections?.length > 0) {
+                console.log('📝 AI 수정 사항:', validationResult.corrections);
+              }
+              
+              setParsedData(validationResult.data);
+            } catch (aiError) {
+              // Gemini 할당량 초과 등의 오류 처리
+              if (aiError.message.includes('429') || aiError.message.includes('quota')) {
+                console.warn('⚠️ Gemini API 할당량 초과, 규칙 기반 결과 사용');
+                setValidationStatus('AI 할당량 초과 (규칙 기반 결과 사용)');
+              } else {
+                console.error('❌ AI 검증 오류:', aiError);
+                setValidationStatus('AI 검증 실패 (규칙 기반 결과 사용)');
+              }
+              setParsedData(data);
             }
-            
-            setParsedData(validationResult.data);
           } else {
+            if (skipAIForLarge) {
+              console.log('💡 10MB 초과 PDF는 규칙 기반 파싱만 사용 (Gemini 할당량 절약)');
+              setValidationStatus('대용량 PDF 처리 완료 (규칙 기반)');
+            }
             setParsedData(data);
           }
           
