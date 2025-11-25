@@ -31,9 +31,15 @@ Cloudflare Pages는 **빌드만 하고, 배포는 자동**으로 처리합니다
 3. Build configuration:
    ✅ Build command: npm run build
    ✅ Build output directory: dist
-   ❌ Deploy command: (비워두기 또는 삭제)
+   ✅ Deploy command: echo "Deployed via Cloudflare Pages"
+      (주의: 비워둘 수 없음, required 필드)
 4. Save
 ```
+
+**Deploy command 설명:**
+- `echo "..."`: 더미 명령어 (빠른 성공)
+- Git Integration은 실제로 이 명령어를 **무시**함
+- 실제 배포는 Cloudflare Pages가 자동 처리
 
 ---
 
@@ -92,9 +98,13 @@ Cloudflare Pages 감지
 4. Build configuration 수정:
    - Build command: npm run build
    - Build output: dist
-   - Deploy command: (비워두기) ← 중요!
+   - Deploy command: echo "Deployed via Cloudflare Pages" ← 변경!
 5. Save
 ```
+
+**주의:** Deploy command는 필수 필드입니다.
+- `npx wrangler deploy` (❌ Workers 명령어) 
+- `echo "..."` (✅ 더미 명령어, 추천)
 
 ### **Step 2: 재배포 트리거**
 ```
