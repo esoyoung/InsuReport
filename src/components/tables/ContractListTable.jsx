@@ -182,10 +182,10 @@ export default function ContractListTable({ data }) {
         <table className="report-table table-fixed min-w-full divide-y divide-gray-200">
           <thead className="bg-teal-50">
             <tr>
-              <th scope="col" className="px-1 py-2 text-center text-primary-700 font-semibold align-middle" style={{ width: '2.5rem' }}>
+              <th scope="col" className="px-1 py-2 text-center text-primary-700 font-semibold align-middle" style={{ width: '1rem' }}>
                 번호
               </th>
-              <th scope="col" className="px-1 py-2 text-left text-primary-700 font-semibold align-middle" style={{ width: '5rem' }}>
+              <th scope="col" className="px-1 py-2 text-left text-primary-700 font-semibold align-middle" style={{ width: '6rem' }}>
                 보험사
               </th>
               <th scope="col" className="px-1 py-2 text-left text-primary-700 font-semibold align-middle" style={{ minWidth: '20rem' }}>

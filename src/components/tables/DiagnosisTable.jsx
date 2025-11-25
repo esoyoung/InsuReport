@@ -256,22 +256,22 @@ export default function DiagnosisTable({ data }) {
         </div>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-lg border border-gray-200">
-        <table className="report-table divide-y divide-gray-200">
+      <div className="mt-4 overflow-hidden rounded-lg border border-gray-200">
+        <table className="report-table divide-y divide-gray-200 text-xs" style={{ fontSize: '0.7rem', lineHeight: '1.2' }}>
           <thead className="bg-teal-50">
             <tr>
-              <th scope="col" className="px-2 text-left text-primary-700 font-semibold">담보 항목</th>
-              <th scope="col" className="px-2 text-right text-primary-700 font-semibold">권장금액</th>
-              <th scope="col" className="px-2 text-right text-primary-700 font-semibold">가입금액</th>
-              <th scope="col" className="px-2 text-right text-primary-700 font-semibold">부족금액</th>
-              <th scope="col" className="px-2 text-center text-primary-700 font-semibold">상태</th>
+              <th scope="col" className="px-1 py-1 text-left text-primary-700 font-semibold" style={{ fontSize: '0.7rem' }}>담보 항목</th>
+              <th scope="col" className="px-1 py-1 text-right text-primary-700 font-semibold" style={{ fontSize: '0.7rem', width: '5rem' }}>권장금액</th>
+              <th scope="col" className="px-1 py-1 text-right text-primary-700 font-semibold" style={{ fontSize: '0.7rem', width: '5rem' }}>가입금액</th>
+              <th scope="col" className="px-1 py-1 text-right text-primary-700 font-semibold" style={{ fontSize: '0.7rem', width: '5rem' }}>부족금액</th>
+              <th scope="col" className="px-1 py-1 text-center text-primary-700 font-semibold" style={{ fontSize: '0.7rem', width: '3.5rem' }}>상태</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-100">
             {COVERAGE_GROUPS.map((group) => (
               <React.Fragment key={group.title}>
                 <tr className="bg-gray-50/80">
-                  <td colSpan={5} className="px-2 py-2 text-[9pt] font-semibold text-gray-700">
+                  <td colSpan={5} className="px-1 py-0.5 font-semibold text-gray-700" style={{ fontSize: '0.7rem' }}>
                     {group.title}
                   </td>
                 </tr>
@@ -290,25 +290,26 @@ export default function DiagnosisTable({ data }) {
                   const shortfallDisplay = row.부족금액값 > 0 ? formatWon(row.부족금액값) : '—';
 
                   return (
-                    <tr key={`${group.title}-${name}`} className="align-top">
-                      <td className="px-2 text-gray-900">
+                    <tr key={`${group.title}-${name}`} className="align-top" style={{ fontSize: '0.7rem', lineHeight: '1.2' }}>
+                      <td className="px-1 py-0.5 text-gray-900">
                         {renderCellContent(name)}
                       </td>
-                      <td className="px-2 text-gray-700">
+                      <td className="px-1 py-0.5 text-gray-700">
                         {renderCellContent(recommendedDisplay, { align: 'right' })}
                       </td>
-                      <td className="px-2 text-gray-700">
+                      <td className="px-1 py-0.5 text-gray-700">
                         {renderCellContent(insuredDisplay, { align: 'right' })}
                       </td>
-                      <td className="px-2 text-gray-700">
+                      <td className="px-1 py-0.5 text-gray-700">
                         {renderCellContent(shortfallDisplay, { align: 'right' })}
                       </td>
-                      <td className="px-2 text-center">
+                      <td className="px-1 py-0.5 text-center">
                         <span className={classNames(
-                          'inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold',
+                          'inline-flex items-center justify-center rounded-full px-2 py-0.5 font-semibold',
                           statusStyle.screen,
                           statusStyle.print
                         )}
+                        style={{ fontSize: '0.65rem' }}
                         >
                           {row.상태}
                         </span>
@@ -321,7 +322,7 @@ export default function DiagnosisTable({ data }) {
             {additionalRows.length > 0 && (
               <>
                 <tr className="bg-gray-50/80">
-                  <td colSpan={5} className="px-2 py-2 text-[9pt] font-semibold text-gray-700">추가 담보</td>
+                  <td colSpan={5} className="px-1 py-0.5 font-semibold text-gray-700" style={{ fontSize: '0.7rem' }}>추가 담보</td>
                 </tr>
                 {additionalRows
                   .sort((a, b) => {
@@ -340,25 +341,26 @@ export default function DiagnosisTable({ data }) {
                     const shortfallDisplay = row.부족금액값 > 0 ? formatWon(row.부족금액값) : '—';
 
                     return (
-                      <tr key={`additional-${row.담보명}`} className="align-top">
-                        <td className="px-2 text-gray-900">
+                      <tr key={`additional-${row.담보명}`} className="align-top" style={{ fontSize: '0.7rem', lineHeight: '1.2' }}>
+                        <td className="px-1 py-0.5 text-gray-900">
                           {renderCellContent(row.담보명)}
                         </td>
-                        <td className="px-2 text-gray-700">
+                        <td className="px-1 py-0.5 text-gray-700">
                           {renderCellContent(recommendedDisplay, { align: 'right' })}
                         </td>
-                        <td className="px-2 text-gray-700">
+                        <td className="px-1 py-0.5 text-gray-700">
                           {renderCellContent(insuredDisplay, { align: 'right' })}
                         </td>
-                        <td className="px-2 text-gray-700">
+                        <td className="px-1 py-0.5 text-gray-700">
                           {renderCellContent(shortfallDisplay, { align: 'right' })}
                         </td>
-                        <td className="px-2 text-center">
+                        <td className="px-1 py-0.5 text-center">
                           <span className={classNames(
-                            'inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold',
+                            'inline-flex items-center justify-center rounded-full px-2 py-0.5 font-semibold',
                             statusStyle.screen,
                             statusStyle.print
                           )}
+                          style={{ fontSize: '0.65rem' }}
                           >
                             {row.상태}
                           </span>

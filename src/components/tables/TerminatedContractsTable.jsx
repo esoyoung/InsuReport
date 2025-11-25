@@ -81,39 +81,51 @@ export default function TerminatedContractsTable({ data }) {
         <table className="report-table table-fixed min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th scope="col" className="px-1 py-2 text-center text-gray-700 font-semibold align-middle" style={{ width: '2.5rem' }}>
-                번호
+              <th scope="col" className="px-1 py-2 text-center text-gray-700 font-semibold align-middle" style={{ width: '3rem' }}>
+                상태
               </th>
-              <th scope="col" className="px-1 py-2 text-left text-gray-700 font-semibold align-middle" style={{ width: '5rem' }}>
-                보험사
+              <th scope="col" className="px-1 py-2 text-left text-gray-700 font-semibold align-middle" style={{ width: '6rem' }}>
+                회사명
               </th>
-              <th scope="col" className="px-1 py-2 text-left text-gray-700 font-semibold align-middle" style={{ minWidth: '20rem' }}>
+              <th scope="col" className="px-1 py-2 text-left text-gray-700 font-semibold align-middle" style={{ minWidth: '15rem' }}>
                 상품명
               </th>
-              <th scope="col" className="px-1 py-2 text-center text-gray-700 font-semibold align-middle" style={{ width: '4.75rem' }}>
+              <th scope="col" className="px-1 py-2 text-center text-gray-700 font-semibold align-middle" style={{ width: '4.5rem' }}>
                 계약일
               </th>
-              <th scope="col" className="px-1 py-2 text-center text-gray-700 font-semibold align-middle" style={{ width: '4.75rem' }}>
-                해지일
+              <th scope="col" className="px-1 py-2 text-center text-gray-700 font-semibold align-middle" style={{ width: '3rem' }}>
+                납입주기
               </th>
-              <th scope="col" className="px-1 py-2 text-center text-gray-700 font-semibold align-middle" style={{ width: '4rem' }}>
-                상태
+              <th scope="col" className="px-1 py-2 text-center text-gray-700 font-semibold align-middle" style={{ width: '3rem' }}>
+                납입기간
+              </th>
+              <th scope="col" className="px-1 py-2 text-center text-gray-700 font-semibold align-middle" style={{ width: '3rem' }}>
+                만기
+              </th>
+              <th scope="col" className="px-1 py-2 text-right text-gray-700 font-semibold align-middle" style={{ width: '6rem' }}>
+                월보험료
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
             {terminatedList.map((contract, index) => {
-              const displayNumber = index + 1;
-              const company = contract.보험사 || '—';
+              const status = contract.상태 || '해지';
+              const company = contract.회사명 || contract.보험사 || '—';
               const product = contract.상품명 || '—';
               const startDate = contract.계약일 || contract.가입일 || '—';
-              const endDate = contract.해지일 || contract.실효일 || '—';
-              const status = contract.상태 || '해지';
+              const payCycle = contract.납입주기 || '—';
+              const payPeriod = contract.납입기간 || '—';
+              const maturity = contract.만기 || '—';
+              const premium = contract.월보험료 
+                ? `${currencyFormatter.format(sanitizeNumber(contract.월보험료))}원`
+                : '—';
 
               return (
                 <tr key={`terminated-${index}`} className="hover:bg-gray-50 align-middle">
-                  <td className="px-1 py-2 text-gray-900 align-middle">
-                    {renderCellContent(displayNumber, { align: 'center' })}
+                  <td className="px-1 py-2 text-gray-700 align-middle">
+                    <span className="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                      {status}
+                    </span>
                   </td>
                   <td className="px-1 py-2 text-gray-700 align-middle">
                     {renderCellContent(company, { align: 'left' })}
@@ -125,12 +137,16 @@ export default function TerminatedContractsTable({ data }) {
                     {renderCellContent(startDate, { align: 'center' })}
                   </td>
                   <td className="px-1 py-2 text-gray-700 align-middle">
-                    {renderCellContent(endDate, { align: 'center' })}
+                    {renderCellContent(payCycle, { align: 'center' })}
                   </td>
                   <td className="px-1 py-2 text-gray-700 align-middle">
-                    <span className="inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
-                      {status}
-                    </span>
+                    {renderCellContent(payPeriod, { align: 'center' })}
+                  </td>
+                  <td className="px-1 py-2 text-gray-700 align-middle">
+                    {renderCellContent(maturity, { align: 'center' })}
+                  </td>
+                  <td className="px-1 py-2 text-gray-900 align-middle">
+                    {renderCellContent(premium, { align: 'right' })}
                   </td>
                 </tr>
               );

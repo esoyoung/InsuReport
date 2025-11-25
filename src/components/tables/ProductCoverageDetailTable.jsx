@@ -4,14 +4,6 @@ const currencyFormatter = new Intl.NumberFormat('ko-KR');
 
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
 
-const sanitizeNumber = (value) => {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (value === null || value === undefined) return 0;
-  const cleaned = String(value).replace(/[^0-9.-]/g, '');
-  const numeric = Number(cleaned);
-  return Number.isFinite(numeric) ? numeric : 0;
-};
-
 const hasMeaningfulText = (value) => {
   if (value === null || value === undefined) return false;
   return String(value).trim().length > 0;
@@ -84,58 +76,85 @@ export default function ProductCoverageDetailTable({ data }) {
 
           return (
             <div key={`product-${productIndex}`} className="border border-gray-200 rounded-lg overflow-hidden">
-              {/* 상품 헤더 */}
+              {/* 상품 헤더 - 상품 기본 정보 */}
               <div className="bg-primary-50 px-4 py-3 border-b border-primary-100">
-                <h3 className="text-base font-semibold text-primary-900">
-                  {product.상품명 || `상품 ${productIndex + 1}`}
-                </h3>
-                {product.보험사 && (
-                  <p className="text-xs text-primary-700 mt-1">
-                    {product.보험사}
-                  </p>
-                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <h3 className="text-base font-semibold text-primary-900">
+                      {product.상품명 || `상품 ${productIndex + 1}`}
+                    </h3>
+                    {product.보험사 && (
+                      <p className="text-xs text-primary-700 mt-0.5">
+                        보험사: {product.보험사}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-xs text-primary-800 space-y-0.5">
+                    {product.계약자 && product.피보험자 && (
+                      <p>계약자/피보험자: {product.계약자}/{product.피보험자}</p>
+                    )}
+                    {(product.납입주기 || product.납입기간 || product.만기) && (
+                      <p>
+                        납입: {product.납입주기 || '—'} / {product.납입기간 || '—'} / {product.만기 || '—'}
+                      </p>
+                    )}
+                    {product.보험기간 && (
+                      <p>보험기간: {product.보험기간}</p>
+                    )}
+                    {product.월납보험료 && (
+                      <p className="font-semibold">월납보험료: {product.월납보험료}</p>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* 담보 테이블 */}
               {hasCoverages ? (
                 <div className="overflow-x-auto">
-                  <table className="report-table min-w-full divide-y divide-gray-200">
+                  <table className="report-table min-w-full divide-y divide-gray-200 text-xs">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th scope="col" className="px-2 py-2 text-center text-gray-700 font-semibold align-middle" style={{ width: '2.5rem' }}>
+                        <th scope="col" className="px-1 py-1 text-center text-gray-700 font-semibold align-middle" style={{ width: '2rem', fontSize: '0.7rem' }}>
                           번호
                         </th>
-                        <th scope="col" className="px-2 py-2 text-left text-gray-700 font-semibold align-middle" style={{ minWidth: '15rem' }}>
-                          담보명
+                        <th scope="col" className="px-1 py-1 text-center text-gray-700 font-semibold align-middle" style={{ width: '3rem', fontSize: '0.7rem' }}>
+                          구분
                         </th>
-                        <th scope="col" className="px-2 py-2 text-right text-gray-700 font-semibold align-middle" style={{ width: '8rem' }}>
+                        <th scope="col" className="px-1 py-1 text-left text-gray-700 font-semibold align-middle" style={{ minWidth: '10rem', fontSize: '0.7rem' }}>
+                          회사 담보명
+                        </th>
+                        <th scope="col" className="px-1 py-1 text-left text-gray-700 font-semibold align-middle" style={{ minWidth: '10rem', fontSize: '0.7rem' }}>
+                          신정원 담보명
+                        </th>
+                        <th scope="col" className="px-1 py-1 text-right text-gray-700 font-semibold align-middle" style={{ width: '7rem', fontSize: '0.7rem' }}>
                           가입금액
-                        </th>
-                        <th scope="col" className="px-2 py-2 text-center text-gray-700 font-semibold align-middle" style={{ width: '5rem' }}>
-                          보장기간
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
                       {coverages.map((coverage, coverageIndex) => {
                         const displayNumber = coverageIndex + 1;
-                        const coverageName = coverage.담보명 || '—';
+                        const type = coverage.구분 || '—';
+                        const companyName = coverage.회사담보명 || coverage.담보명 || '—';
+                        const standardName = coverage.신정원담보명 || coverage.표준담보명 || '—';
                         const amount = coverage.가입금액 || '—';
-                        const period = coverage.보장기간 || '—';
 
                         return (
-                          <tr key={`coverage-${coverageIndex}`} className="hover:bg-gray-50 align-middle">
-                            <td className="px-2 py-2 text-gray-900 align-middle">
+                          <tr key={`coverage-${coverageIndex}`} className="hover:bg-gray-50 align-middle" style={{ fontSize: '0.7rem', lineHeight: '1.2' }}>
+                            <td className="px-1 py-0.5 text-gray-900 align-middle">
                               {renderCellContent(displayNumber, { align: 'center' })}
                             </td>
-                            <td className="px-2 py-2 text-gray-700 align-middle">
-                              {renderCellContent(coverageName, { align: 'left' })}
+                            <td className="px-1 py-0.5 text-gray-700 align-middle">
+                              {renderCellContent(type, { align: 'center' })}
                             </td>
-                            <td className="px-2 py-2 text-gray-700 align-middle">
+                            <td className="px-1 py-0.5 text-gray-700 align-middle">
+                              {renderCellContent(companyName, { align: 'left' })}
+                            </td>
+                            <td className="px-1 py-0.5 text-gray-700 align-middle">
+                              {renderCellContent(standardName, { align: 'left' })}
+                            </td>
+                            <td className="px-1 py-0.5 text-gray-700 align-middle">
                               {renderCellContent(amount, { align: 'right' })}
-                            </td>
-                            <td className="px-2 py-2 text-gray-700 align-middle">
-                              {renderCellContent(period, { align: 'center' })}
                             </td>
                           </tr>
                         );
@@ -155,6 +174,7 @@ export default function ProductCoverageDetailTable({ data }) {
 
       <div className="mt-3 space-y-1 text-xs text-gray-500">
         <p>※ 상품별 담보 내용은 계약 시점 기준이며, 현재와 다를 수 있습니다.</p>
+        <p>※ 회사 담보명은 보험사별 담보명이며, 신정원 담보명은 표준화된 담보명입니다.</p>
       </div>
     </div>
   );
