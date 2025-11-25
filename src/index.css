@@ -295,4 +295,46 @@ code {
       grid-template-columns: repeat(4, 1fr);
     }
   }
+  
+  .premium-total-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f766e;
+  }
+  
+  .diagnosis-card-label {
+    font-size: 10pt;
+    font-weight: 500;
+    color: #6b7280;
+    margin-bottom: 4px;
+  }
+  
+  .diagnosis-card-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #111827;
+    text-align: center;
+  }
+}
+
+@media print {
+  .premium-total-value {
+    font-size: 12pt !important;
+    font-weight: 700 !important;
+    color: #0f766e !important;
+  }
+  
+  .diagnosis-card-label {
+    font-size: 8pt !important;
+    font-weight: 500 !important;
+    color: #4b5563 !important;
+    margin-bottom: 1mm !important;
+  }
+  
+  .diagnosis-card-value {
+    font-size: 14pt !important;
+    font-weight: 700 !important;
+    color: #000 !important;
+    text-align: center !important;
+  }
 }
