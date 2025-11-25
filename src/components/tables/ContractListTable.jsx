@@ -172,14 +172,15 @@ export default function ContractListTable({ data }) {
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-primary-700">보유 계약 리스트</h2>
-          <p className="text-sm text-gray-500">
+          <h2 className="text-2xl font-semibold text-gray-900">보유 계약 리스트</h2>
+          <p className="text-xs text-gray-500 mt-1">
             KB 보장분석 리포트의 보유 계약 리스트를 기반으로 정리했습니다.
           </p>
         </div>
         {hasContracts ? (
-          <div className="rounded-lg bg-primary-50 px-4 py-2 text-sm text-primary-700 border border-primary-100">
-            월 보험료 합계 {currencyFormatter.format(totalMonthlyPremium)}원
+          <div className="rounded-lg bg-primary-50 px-4 py-2 border border-primary-100">
+            <span className="text-sm text-primary-700">월 보험료 합계 </span>
+            <span className="premium-total-value">{currencyFormatter.format(totalMonthlyPremium)}원</span>
           </div>
         ) : null}
       </div>
