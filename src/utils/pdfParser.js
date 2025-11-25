@@ -20,7 +20,8 @@ const KNOWN_COMPANIES = [
   '삼성화재', '현대해상', '메리츠화재', 'DB손해보험', 'DB손보', 'KB손해보험',
   '한화손해보험', '롯데손해보험', '흥국화재', 'MG손해보험', 'NH농협손해보험',
   '농협손해보험', '더케이손해보험', '우체국보험', '우정사업본부', 'AXA손해보험',
-  '캐롯손해보험', 'Chubb손해보험', 'BNP파리바카디프생명', 'BNP파리바카디프손해보험'
+  '캐롯손해보험', 'Chubb손해보험', 'BNP파리바카디프생명', 'BNP파리바카디프손해보험',
+  '메리츠', '메리츠생명'
 ];
 
 const KNOWN_COMPANY_MAP = new Map(
@@ -34,72 +35,71 @@ function extractCompanyAndProduct(tokens) {
     return { company: '', product: '' };
   }
 
-  const cleanedTokens = tokens.filter((token) => token && token.trim().length > 0);
-  if (cleanedTokens.length === 0) {
+  // 토큰 전처리: em dash, 하이픈, 빈 토큰 제거
+  let workingTokens = tokens
+    .filter((token) => token && token.trim().length > 0)
+    .filter((token) => token !== '—' && token !== '-');
+
+  if (workingTokens.length === 0) {
     return { company: '', product: '' };
   }
 
-  const maxLength = Math.min(3, cleanedTokens.length);
+  // 전체 토큰 범위에서 보험사 탐색
+  let foundCompany = null;
+  let companyStartIndex = -1;
+  let companyLength = 0;
 
-  for (let length = maxLength; length >= 1; length -= 1) {
-    const candidateTokens = cleanedTokens.slice(0, length);
-    const normalizedCandidate = candidateTokens.join('').replace(/\s+/g, '');
+  for (let start = 0; start < workingTokens.length; start += 1) {
+    // (무)로 시작하는 토큰은 건너뛰기
+    if (/^\(무/.test(workingTokens[start])) continue;
 
-    if (KNOWN_COMPANY_MAP.has(normalizedCandidate)) {
-      const companyName = KNOWN_COMPANY_MAP.get(normalizedCandidate);
-      let remainderTokens = cleanedTokens.slice(length);
-      
-      // 보험사 바로 뒤의 '-' 토큰 제거
-      if (remainderTokens.length > 0 && remainderTokens[0] === '—') {
-        remainderTokens = remainderTokens.slice(1);
-      }
-      
-      return {
-        company: companyName,
-        product: remainderTokens.join(' ').trim()
-      };
-    }
-  }
-
-  for (let start = 1; start < cleanedTokens.length; start += 1) {
-    if (/^\(무/.test(cleanedTokens[start])) continue;
-    const windowMax = Math.min(3, cleanedTokens.length - start);
+    const windowMax = Math.min(3, workingTokens.length - start);
     for (let length = windowMax; length >= 1; length -= 1) {
-      const candidateTokens = cleanedTokens.slice(start, start + length);
+      const candidateTokens = workingTokens.slice(start, start + length);
       const normalizedCandidate = candidateTokens.join('').replace(/\s+/g, '');
+
       if (KNOWN_COMPANY_MAP.has(normalizedCandidate)) {
-        const companyName = KNOWN_COMPANY_MAP.get(normalizedCandidate);
-        let productTokens = [
-          ...cleanedTokens.slice(0, start),
-          ...cleanedTokens.slice(start + length)
-        ];
-        
-        // 상품명에서 시작/끝의 '-' 제거
-        productTokens = productTokens.filter((token) => token !== '—');
-        
-        return {
-          company: companyName,
-          product: productTokens.join(' ').trim()
-        };
+        foundCompany = KNOWN_COMPANY_MAP.get(normalizedCandidate);
+        companyStartIndex = start;
+        companyLength = length;
+        break;
       }
     }
+    if (foundCompany) break;
   }
 
-  const [firstToken, ...restTokens] = cleanedTokens;
+  // 보험사를 찾은 경우
+  if (foundCompany) {
+    const productTokens = [
+      ...workingTokens.slice(0, companyStartIndex),
+      ...workingTokens.slice(companyStartIndex + companyLength)
+    ];
+    return {
+      company: foundCompany,
+      product: productTokens.join(' ').trim()
+    };
+  }
+
+  // 보험사를 찾지 못한 경우 폴백 로직
+  const [firstToken, ...restTokens] = workingTokens;
+  
+  // (무)로 시작하면 전체를 상품명으로
   if (/^\(무/.test(firstToken)) {
     return {
       company: '',
-      product: cleanedTokens.join(' ').trim()
+      product: workingTokens.join(' ').trim()
     };
   }
 
+  // 보험 관련 키워드가 없으면 전체를 상품명으로
   if (!COMPANY_KEYWORD_PATTERN.test(firstToken)) {
     return {
       company: '',
-      product: cleanedTokens.join(' ').trim()
+      product: workingTokens.join(' ').trim()
     };
   }
 
+  // 첫 토큰을 보험사로 추정
   return {
     company: firstToken,
     product: restTokens.join(' ').trim()
