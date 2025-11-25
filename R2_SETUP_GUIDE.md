@@ -40,6 +40,47 @@ Vercel의 4.5MB 페이로드 제한을 회피하여 대용량 PDF(10MB, 50MB, 10
    - **Location**: `Automatic` (권장)
 3. **"Create bucket"** 클릭
 
+### Step 3-1: CORS 설정 (중요!)
+
+버킷 생성 후 CORS를 설정해야 클라이언트에서 업로드 가능합니다:
+
+1. 생성한 버킷(`insu-report-pdfs`) 클릭
+2. **"Settings"** 탭 클릭
+3. **"CORS Policy"** 섹션 찾기
+4. **"Add CORS policy"** 또는 **"Edit"** 클릭
+5. 다음 JSON 입력:
+
+```json
+[
+  {
+    "AllowedOrigins": [
+      "https://insu-report.vercel.app",
+      "https://*.vercel.app",
+      "http://localhost:5173",
+      "http://localhost:3000"
+    ],
+    "AllowedMethods": [
+      "GET",
+      "PUT",
+      "POST",
+      "DELETE",
+      "HEAD"
+    ],
+    "AllowedHeaders": [
+      "*"
+    ],
+    "ExposeHeaders": [
+      "ETag"
+    ],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+6. **"Save"** 클릭
+
+⚠️ **중요**: `https://insu-report.vercel.app`를 실제 배포 도메인으로 변경하세요!
+
 ### Step 4: R2 API 토큰 생성
 
 1. R2 페이지 우측 상단 → **"Manage R2 API Tokens"**
