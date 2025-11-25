@@ -2,7 +2,9 @@ import React from 'react';
 import { useInsuranceStore } from '../store/insuranceStore';
 import ContractSummaryTable from './tables/ContractSummaryTable';
 import ContractListTable from './tables/ContractListTable';
+import TerminatedContractsTable from './tables/TerminatedContractsTable';
 import DiagnosisTable from './tables/DiagnosisTable';
+import ProductCoverageDetailTable from './tables/ProductCoverageDetailTable';
 
 const sanitizeNumericValue = (value) => {
   if (typeof value === 'number') return value;
@@ -85,9 +87,19 @@ function ReportViewer() {
           <ContractListTable data={parsedData} />
         </section>
 
-        {/* 3. 담보별 진단현황 */}
+        {/* 3. 실효/해지계약현황 */}
+        <section className="page-break">
+          <TerminatedContractsTable data={parsedData} />
+        </section>
+
+        {/* 4. 담보별 진단현황 */}
         <section className="page-break">
           <DiagnosisTable data={parsedData} />
+        </section>
+
+        {/* 5. 상품별 가입담보상세 */}
+        <section className="page-break">
+          <ProductCoverageDetailTable data={parsedData} />
         </section>
       </div>
     </div>
