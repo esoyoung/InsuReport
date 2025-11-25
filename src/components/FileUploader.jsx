@@ -2,13 +2,14 @@ import React, { useCallback, useState } from 'react';
 import { useInsuranceStore } from '../store/insuranceStore';
 import { parsePDF } from '../utils/pdfParser';
 import { validateContractsWithAI, isAIValidationAvailable } from '../utils/aiValidator';
+import { compressPDF, isPDFTooLarge, formatFileSize } from '../utils/pdfCompressor';
 
 function FileUploader() {
   const { setLoading, setError, setParsedData, isLoading, error } = useInsuranceStore();
   const [validationStatus, setValidationStatus] = useState(null);
 
   const handleFileUpload = useCallback(async (event) => {
-    const file = event.target.files?.[0];
+    let file = event.target.files?.[0];
     if (!file) return;
 
     if (file.type !== 'application/pdf') {
@@ -21,8 +22,27 @@ function FileUploader() {
     setValidationStatus(null);
 
     try {
+      // 0단계: PDF 압축 (필요한 경우)
+      if (isPDFTooLarge(file, 3)) {
+        console.log('📦 0단계: PDF 크기가 큽니다. 압축 시도...');
+        setValidationStatus(`PDF 압축 중... (${formatFileSize(file.size)})`);
+        
+        const compressionResult = await compressPDF(file, 2.5);
+        
+        if (compressionResult.compressed) {
+          console.log(`✅ 압축 완료: ${formatFileSize(compressionResult.originalSize)} → ${formatFileSize(compressionResult.compressedSize)}`);
+          file = compressionResult.file;
+          setValidationStatus(
+            `압축 완료 (${compressionResult.compressionRatio}% 감소)`
+          );
+        } else if (compressionResult.error) {
+          console.warn('⚠️ 압축 실패, 원본 파일 사용:', compressionResult.error);
+        }
+      }
+
       // 1단계: 규칙 기반 파싱
       console.log('📄 1단계: 규칙 기반 PDF 파싱 시작...');
+      setValidationStatus('PDF 분석 중...');
       const data = await parsePDF(file);
       console.log('✅ 규칙 기반 파싱 완료');
 
