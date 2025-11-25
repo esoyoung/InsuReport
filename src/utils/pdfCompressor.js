@@ -3,13 +3,13 @@ import { PDFDocument } from 'pdf-lib';
 /**
  * PDF 파일을 압축
  * - 이미지 품질 저하 없이 메타데이터 제거 및 최적화
- * - Vercel 페이로드 제한(4.5MB)을 고려하여 3MB 이하로 압축 시도
+ * - Vercel 페이로드 제한(4.5MB)을 고려하여 2MB 이하로 압축 시도
  * 
  * @param {File} file - 원본 PDF 파일
- * @param {number} targetSizeMB - 목표 크기 (MB), 기본값 2.5MB
+ * @param {number} targetSizeMB - 목표 크기 (MB), 기본값 2.0MB
  * @returns {Promise<{compressed: boolean, originalSize: number, compressedSize: number, file: File}>}
  */
-export async function compressPDF(file, targetSizeMB = 2.5) {
+export async function compressPDF(file, targetSizeMB = 2.0) {
   try {
     const originalSizeBytes = file.size;
     const originalSizeMB = originalSizeBytes / (1024 * 1024);
@@ -45,13 +45,27 @@ export async function compressPDF(file, targetSizeMB = 2.5) {
     pdfDoc.setCreator('');
 
     // 2단계: 압축 옵션으로 저장
-    const compressedBytes = await pdfDoc.save({
+    let compressedBytes = await pdfDoc.save({
       useObjectStreams: true, // 객체 스트림 사용 (압축률 향상)
       addDefaultPage: false,
       objectsPerTick: 50, // 처리 속도 향상
     });
 
-    const compressedSizeBytes = compressedBytes.length;
+    // 3단계: 목표 크기 미달성 시 페이지 재압축 시도
+    let compressedSizeBytes = compressedBytes.length;
+    if (compressedSizeBytes > targetSizeBytes) {
+      console.log('⚠️ 추가 압축 시도 중...');
+      
+      // 더 공격적인 압축 설정
+      compressedBytes = await pdfDoc.save({
+        useObjectStreams: true,
+        addDefaultPage: false,
+        objectsPerTick: 20,
+      });
+      
+      compressedSizeBytes = compressedBytes.length;
+    }
+
     const compressedSizeMB = compressedSizeBytes / (1024 * 1024);
     const compressionRatio = ((originalSizeBytes - compressedSizeBytes) / originalSizeBytes * 100).toFixed(1);
 

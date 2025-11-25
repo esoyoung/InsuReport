@@ -23,11 +23,11 @@ function FileUploader() {
 
     try {
       // 0단계: PDF 압축 (필요한 경우)
-      if (isPDFTooLarge(file, 3)) {
+      if (isPDFTooLarge(file, 2.5)) {
         console.log('📦 0단계: PDF 크기가 큽니다. 압축 시도...');
         setValidationStatus(`PDF 압축 중... (${formatFileSize(file.size)})`);
         
-        const compressionResult = await compressPDF(file, 2.5);
+        const compressionResult = await compressPDF(file, 2.0);
         
         if (compressionResult.compressed) {
           console.log(`✅ 압축 완료: ${formatFileSize(compressionResult.originalSize)} → ${formatFileSize(compressionResult.compressedSize)}`);
