@@ -5,6 +5,56 @@
  * 원본 PDF 구조 정확 분석 기반
  */
 
+const sanitizeNumber = (value) => {
+  if (typeof value === 'number') return value;
+  if (!value) return 0;
+  const cleaned = String(value).replace(/[^0-9.-]/g, '');
+  return Number(cleaned) || 0;
+};
+
+const KNOWN_COMPANIES = [
+  '삼성생명', '교보생명', '한화생명', '미래에셋생명', '라이나생명', 'AIA생명',
+  'ING생명', '오렌지라이프', 'ABL생명', '농협생명', '신한라이프', '흥국생명',
+  '동양생명', '푸본현대생명', '푸르덴셜생명', '메트라이프생명', 'DGB생명',
+  'KB라이프생명', '교보라이프플래닛', 'DB생명', '에이스손해보험', 'AIG손해보험',
+  '삼성화재', '현대해상', '메리츠화재', 'DB손해보험', 'DB손보', 'KB손해보험',
+  '한화손해보험', '롯데손해보험', '흥국화재', 'MG손해보험', 'NH농협손해보험',
+  '농협손해보험', '더케이손해보험', '우체국보험', '우정사업본부', 'AXA손해보험',
+  '캐롯손해보험', 'Chubb손해보험', 'BNP파리바카디프생명', 'BNP파리바카디프손해보험'
+];
+
+const KNOWN_COMPANY_MAP = new Map(
+  KNOWN_COMPANIES.map((name) => [name.replace(/\s+/g, ''), name])
+);
+
+function extractCompanyAndProduct(tokens) {
+  if (!tokens || tokens.length === 0) {
+    return { company: '', product: '' };
+  }
+
+  const maxLength = Math.min(3, tokens.length);
+
+  for (let length = maxLength; length >= 1; length -= 1) {
+    const candidateTokens = tokens.slice(0, length);
+    const normalizedCandidate = candidateTokens.join('').replace(/\s+/g, '');
+
+    if (KNOWN_COMPANY_MAP.has(normalizedCandidate)) {
+      const companyName = KNOWN_COMPANY_MAP.get(normalizedCandidate);
+      const remainderTokens = tokens.slice(length);
+      return {
+        company: companyName,
+        product: remainderTokens.join(' ').trim()
+      };
+    }
+  }
+
+  const [firstToken, ...remainder] = tokens;
+  return {
+    company: firstToken,
+    product: remainder.join(' ').trim()
+  };
+}
+
 // Y 좌표 기반 텍스트 추출
 async function extractTextWithCoordinates(pdf) {
   const allText = [];
@@ -77,126 +127,107 @@ function parseCustomerInfo(text) {
   return customerInfo;
 }
 
-// 계약 리스트 파싱 (완전 재작성 - 원본 구조 기반)
+// 계약 리스트 파싱 (보유 계약 리스트 기반)
 function parseContractList(text) {
   const contracts = [];
-  
-  // "님의 전체 계약리스트" 섹션 찾기
-  const contractSectionMatch = text.match(/님의 전체 계약리스트([\s\S]*?)(?=충청GA사업단|--- PAGE_BREAK ---|$)/);
-  
+
+  const contractSectionMatch = text.match(/님의\s*(?:보유|전체)\s*계약\s*리스트([\s\S]*?)(?=님의\s*(?:전체\s*담보|담보별 가입 현황|보유 담보|전체 담보 진단 현황|보장현황)|충청GA사업단|--- PAGE_BREAK ---|$)/);
+
   if (!contractSectionMatch) {
     console.warn('⚠️ 계약 리스트 섹션을 찾을 수 없습니다');
     return [];
   }
-  
-  const sectionText = contractSectionMatch[1];
-  const lines = sectionText.split('\n').map(l => l.trim()).filter(l => l);
-  
-  console.log(`📋 계약 리스트 섹션 분석 시작 (${lines.length}줄)`);
-  
-  // Step 1: 계약 기본 정보 추출 (번호, 보험사, 상품명, 날짜)
-  const contractLines = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    
-    // 계약 번호로 시작하는 줄 (1, 2, 3, ...)
-    const numMatch = line.match(/^(\d+)\s/);
-    
-    if (numMatch && parseInt(numMatch[1]) >= 1 && parseInt(numMatch[1]) <= 20) {
-      contractLines.push(line);
-    }
-  }
-  
-  console.log(`  ✓ 계약 줄 발견: ${contractLines.length}개`);
-  
-  // Step 2: 각 계약 줄에서 정보 추출
-  for (const line of contractLines) {
-    // 패턴: "번호 보험사 상품명 날짜"
-    const parts = line.split(/\s+/);
-    const contractNum = parts[0];
-    
-    // 날짜 찾기 (YYYY-MM-DD)
-    const dateMatch = line.match(/(\d{4}-\d{2}-\d{2})/);
-    
-    if (dateMatch) {
-      const date = dateMatch[1];
-      const beforeDate = line.substring(contractNum.length, line.indexOf(date)).trim();
-      
-      // 보험사명 패턴
-      const companyPatterns = [
-        '메리츠화재', '메리츠화 재',
-        'DB손보',
-        'NH농협손보', 'NH농협 손보',
-        '삼성생명',
-        '교보생명',
-        '우정사업본부', '우정사업 본부'
-      ];
-      
-      let company = '';
-      let product = beforeDate;
-      
-      // 알려진 보험사 찾기
-      for (const pattern of companyPatterns) {
-        const normalizedPattern = pattern.replace(/\s/g, '');
-        const normalizedBeforeDate = beforeDate.replace(/\s/g, '');
-        
-        if (normalizedBeforeDate.includes(normalizedPattern)) {
-          company = pattern.replace(/\s/g, '');
-          // 보험사명 다음부터가 상품명
-          const companyIndex = normalizedBeforeDate.indexOf(normalizedPattern);
-          product = normalizedBeforeDate.substring(companyIndex + normalizedPattern.length).trim();
-          break;
-        }
-      }
-      
-      // 보험사를 못 찾았으면 전체를 상품명으로
-      if (!company) {
-        product = beforeDate;
-      }
-      
-      contracts.push({
-        번호: contractNum,
-        보험사: company,
-        상품명: product,
-        가입일: date,
-        납입방법: '-',
-        납입기간: '-',
-        만기나이: '-',
-        월보험료: '0'
-      });
-      
-      console.log(`  ✓ 계약 ${contractNum}: ${company || '(보험사 미상)'} - ${product.substring(0, 30)}...`);
-    }
-  }
-  
-  // Step 3: 납입정보 추출 (월납, 년수, 나이, 금액)
-  // 패턴: "월납 월납 월납 ..." 다음 줄에 "20년 74세 60,590원 20년 80세 144,630원 ..."
-  const paymentSectionIndex = lines.findIndex(l => l.includes('월납') && l.split('월납').length > 2);
-  
-  if (paymentSectionIndex !== -1 && paymentSectionIndex + 1 < lines.length) {
-    const paymentLine = lines[paymentSectionIndex + 1];
-    
-    // "20년 74세 60,590원" 패턴 찾기
-    const paymentMatches = paymentLine.matchAll(/(\d+)년\s+(\d+|종신)세\s+([\d,]+)원/g);
-    
-    let paymentIndex = 0;
-    for (const match of paymentMatches) {
-      if (paymentIndex < contracts.length) {
-        contracts[paymentIndex].납입방법 = '월납';
-        contracts[paymentIndex].납입기간 = match[1] + '년';
-        contracts[paymentIndex].만기나이 = match[2] === '종신' ? '종신' : match[2] + '세';
-        contracts[paymentIndex].월보험료 = match[3].replace(/,/g, '');
-        
-        console.log(`  ✓ 납입정보 추가: 계약 ${contracts[paymentIndex].번호} - ${match[3]}원`);
-        paymentIndex++;
+
+  const sectionLines = contractSectionMatch[1]
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line);
+
+  const filteredLines = sectionLines.filter((line) => {
+    if (!line) return false;
+    if (/^번호\s+보험사/.test(line)) return false;
+    if (/^단위/.test(line)) return false;
+    if (/^합계/.test(line)) return false;
+    return true;
+  });
+
+  const cleanedSection = filteredLines.join('\n');
+
+  const rowRegex = /(\d+)\s+([\s\S]*?)(?=(?:\n\d+\s+)|$)/g;
+  let match;
+
+  while ((match = rowRegex.exec(cleanedSection)) !== null) {
+    const rowNumber = match[1];
+    const rowBody = match[2].trim();
+    if (!rowBody) continue;
+
+    const normalizedRow = rowBody.replace(/\s+/g, ' ').trim();
+    const dateMatch = normalizedRow.match(/(\d{4}-\d{2}-\d{2})/);
+
+    if (!dateMatch) continue;
+
+    const date = dateMatch[1];
+    const dateIndex = normalizedRow.indexOf(date);
+    const beforeDate = normalizedRow.slice(0, dateIndex).trim();
+    const afterDate = normalizedRow.slice(dateIndex + date.length).trim();
+
+    if (!beforeDate) continue;
+
+    const beforeTokens = beforeDate.split(' ').filter(Boolean);
+    const { company, product } = extractCompanyAndProduct(beforeTokens);
+
+    const originalAfterTokens = afterDate.split(' ').filter(Boolean);
+    const workingTokens = [...originalAfterTokens];
+
+    let payCycle = (workingTokens.shift() || '').trim();
+    let paymentPeriod = (workingTokens.shift() || '').trim();
+    let maturityRaw = (workingTokens.shift() || '').trim();
+
+    const premiumMatch = [...afterDate.matchAll(/([\d,]+)\s*원?/g)].pop();
+    const monthlyPremium = premiumMatch ? sanitizeNumber(premiumMatch[1]) : 0;
+
+    const fallbackTokens = originalAfterTokens;
+
+    if (!payCycle) {
+      const fallbackCycle = fallbackTokens.find((token) => /납/.test(token));
+      if (fallbackCycle) {
+        payCycle = fallbackCycle;
       }
     }
-  } else {
-    console.warn('⚠️ 납입정보를 찾을 수 없습니다');
+
+    if (!paymentPeriod) {
+      const fallbackPeriod = fallbackTokens.find((token) => /(년|세|종신)/.test(token));
+      if (fallbackPeriod) {
+        paymentPeriod = fallbackPeriod;
+      }
+    }
+
+    let maturity = maturityRaw.replace(/만기$/, '');
+    if (!maturity) {
+      const fallbackMaturity = fallbackTokens.find((token) => /(세|종신)/.test(token));
+      if (fallbackMaturity) {
+        maturity = fallbackMaturity.replace(/만기$/, '');
+      }
+    }
+
+    if (!company && !product && !monthlyPremium) {
+      continue;
+    }
+
+    contracts.push({
+      번호: rowNumber,
+      보험사: company || '',
+      상품명: product || '',
+      가입일: date,
+      납입주기: payCycle || '-',
+      납입기간: paymentPeriod || '-',
+      만기: maturity || '-',
+      월보험료: monthlyPremium
+    });
   }
-  
-  console.log(`📋 최종 계약 리스트: ${contracts.length}개 추출 완료`);
-  
+
+  console.log(`📋 보유 계약 리스트 추출: ${contracts.length}건`);
+
   return contracts;
 }
 
