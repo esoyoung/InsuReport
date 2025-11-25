@@ -125,7 +125,7 @@ const enrichDiagnosis = (
   const recommended = normalizeKoreanMagnitude(item.권장금액);
   const insured = normalizeKoreanMagnitude(item.가입금액);
   const rawShortfall = normalizeKoreanMagnitude(item.부족금액);
-  const calculatedShortfall = recommended > insured ? recommended - insured : 0;
+  const calculatedShortfall = Math.max(0, recommended - insured);
   const shortfall = rawShortfall !== 0 ? rawShortfall : calculatedShortfall;
   const ratio = recommended > 0 ? Math.max(0, insured / recommended) : insured > 0 ? 1 : 0;
 
@@ -205,32 +205,25 @@ export default function DiagnosisTable({ data }) {
 
   const summaryCards = [
     {
-      label: '부족 담보',
+      label: '부족담보',
       value: `${statusCounts['부족'] || 0}건`,
       tone: 'text-rose-600',
       border: 'border-rose-200',
       background: 'bg-rose-50',
     },
     {
-      label: '미가입 담보',
+      label: '미가입담보',
       value: `${statusCounts['미가입'] || 0}건`,
       tone: 'text-gray-700',
       border: 'border-gray-200',
       background: 'bg-gray-50',
     },
     {
-      label: '주의 담보',
+      label: '주의담보',
       value: `${statusCounts['주의'] || 0}건`,
       tone: 'text-amber-600',
       border: 'border-amber-200',
       background: 'bg-amber-50',
-    },
-    {
-      label: '추가 필요 보장금액',
-      value: totalShortfall > 0 ? formatWon(totalShortfall, '0원') : '0원',
-      tone: 'text-emerald-700',
-      border: 'border-emerald-200',
-      background: 'bg-emerald-50',
     },
   ];
 
@@ -239,24 +232,24 @@ export default function DiagnosisTable({ data }) {
       <div className="md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,320px)] md:gap-6">
         <div className="flex flex-col gap-2">
           <h2 className="text-2xl font-semibold text-gray-900">담보별 진단현황</h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-xs text-gray-500 mt-1">
             권장 금액 대비 현재 가입 현황을 비교하여 부족/미가입 담보를 확인할 수 있습니다.
           </p>
         </div>
         <div className="mt-4 md:mt-0 md:self-end">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-3 gap-3">
             {summaryCards.map((card) => (
               <div
                 key={card.label}
                 className={classNames(
-                  'rounded-lg px-3 py-2 text-center border text-[9pt] leading-tight',
+                  'rounded-lg border px-2 py-1 text-center',
                   card.tone,
                   card.border,
                   card.background
                 )}
               >
-                <p className="text-[7pt] text-gray-500">{card.label}</p>
-                <p className="mt-1 font-semibold text-gray-900">{card.value}</p>
+                <p className="diagnosis-card-label">{card.label}</p>
+                <p className="diagnosis-card-value">{card.value}</p>
               </div>
             ))}
           </div>
