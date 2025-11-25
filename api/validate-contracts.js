@@ -2,10 +2,12 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Vercel Serverless Functions config
+// 주의: Vercel 페이로드 제한은 4.5MB (Hobby) / 4.5MB (Pro)
+// Base64 인코딩 시 크기가 33% 증가하므로 실제 PDF는 ~3MB 이하여야 함
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '50mb',
+      sizeLimit: '10mb', // 최대 10MB body parser 허용
     },
   },
   maxDuration: 60, // 최대 60초 실행 (Vercel Pro 플랜 필요)

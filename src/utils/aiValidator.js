@@ -37,7 +37,21 @@ export async function validateContractsWithAI(pdfFile, parsedData) {
   }
 
   try {
+    // PDF 크기 체크 (Vercel 제한: 4.5MB, Base64는 +33% 증가)
+    const maxFileSize = 3 * 1024 * 1024; // 3MB (Base64 인코딩 후 ~4MB)
+    
+    if (pdfFile.size > maxFileSize) {
+      console.warn(`⚠️ PDF 크기가 너무 큽니다 (${(pdfFile.size / 1024 / 1024).toFixed(2)}MB > 3MB). AI 검증을 건너뜁니다.`);
+      return {
+        validated: false,
+        data: parsedData,
+        message: 'PDF too large for AI validation (> 3MB)',
+        warning: 'PDF 파일이 너무 커서 AI 검증을 수행할 수 없습니다. 규칙 기반 파싱 결과를 사용합니다.',
+      };
+    }
+
     console.log('🤖 Vercel Serverless Function으로 AI 검증 요청...');
+    console.log(`📄 PDF 크기: ${(pdfFile.size / 1024).toFixed(2)}KB`);
 
     // PDF를 Base64로 변환
     const pdfBase64 = await fileToBase64(pdfFile);

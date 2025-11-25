@@ -47,8 +47,14 @@ function FileUploader() {
           // AI가 검증한 데이터 사용
           setParsedData(validationResult.data);
         } else {
-          console.warn('⚠️ AI 검증 실패, 규칙 기반 결과 사용');
-          setValidationStatus('AI 검증 실패 (규칙 기반 결과 사용)');
+          // 경고 메시지 처리
+          if (validationResult.warning) {
+            console.warn('⚠️', validationResult.warning);
+            setValidationStatus(validationResult.warning);
+          } else {
+            console.warn('⚠️ AI 검증 실패, 규칙 기반 결과 사용');
+            setValidationStatus('AI 검증 실패 (규칙 기반 결과 사용)');
+          }
           setParsedData(data);
         }
       } else {
