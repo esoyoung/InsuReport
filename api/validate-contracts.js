@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     
     // Gemini 1.5 Flash 모델 설정 (안정적인 무료 모델)
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash-latest',
+      model: 'gemini-2.0-flash-001',  // 안정적인 무료 모델 (Gemini 2.0)
       generationConfig: {
         temperature: 0.1,
         topP: 0.95,
