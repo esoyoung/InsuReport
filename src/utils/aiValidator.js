@@ -1,9 +1,26 @@
-// 백엔드 API 엔드포인트
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const USE_AI_VALIDATION = import.meta.env.VITE_USE_AI_VALIDATION !== 'false'; // 기본값 true
+// Vercel Serverless Function 엔드포인트 (프로덕션에서는 자동으로 동일 도메인)
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const USE_AI_VALIDATION = import.meta.env.VITE_USE_AI_VALIDATION === 'true';
 
 /**
- * 백엔드 API를 통해 계약 리스트 검증
+ * PDF를 Base64로 변환
+ * @param {File} file - PDF 파일
+ * @returns {Promise<string>} - Base64 인코딩된 문자열
+ */
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const base64 = reader.result.split(',')[1]; // "data:application/pdf;base64," 제거
+      resolve(base64);
+    };
+    reader.onerror = reject;
+  });
+}
+
+/**
+ * Vercel Serverless Function을 통해 계약 리스트 검증
  * @param {File} pdfFile - 원본 PDF 파일
  * @param {Object} parsedData - 규칙 기반 파서가 추출한 데이터
  * @returns {Promise<Object>} - 검증/보정된 데이터
@@ -20,32 +37,46 @@ export async function validateContractsWithAI(pdfFile, parsedData) {
   }
 
   try {
-    console.log('🤖 백엔드 API로 AI 검증 요청...');
+    console.log('🤖 Vercel Serverless Function으로 AI 검증 요청...');
 
-    // FormData 생성
-    const formData = new FormData();
-    formData.append('pdf', pdfFile);
-    formData.append('parsedData', JSON.stringify(parsedData));
+    // PDF를 Base64로 변환
+    const pdfBase64 = await fileToBase64(pdfFile);
 
-    // 백엔드 API 호출
+    // Vercel Serverless Function 호출
     const response = await fetch(`${API_BASE_URL}/api/validate-contracts`, {
       method: 'POST',
-      body: formData,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        pdfBase64,
+        parsedData,
+      }),
     });
 
     if (!response.ok) {
-      throw new Error(`API 오류: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`API 오류: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
     const result = await response.json();
     
     console.log('✅ AI 검증 완료');
     
-    if (result.corrections?.length > 0) {
-      console.log('📝 AI 수정 사항:', result.corrections);
+    if (result.수정사항?.length > 0) {
+      console.log('📝 AI 수정 사항:', result.수정사항);
     }
 
-    return result;
+    return {
+      validated: true,
+      data: {
+        ...parsedData,
+        계약리스트: result.계약리스트,
+      },
+      corrections: result.수정사항,
+      totalPremium: result.총보험료,
+      activePremium: result.활성월보험료,
+    };
   } catch (error) {
     console.error('❌ AI 검증 중 오류 발생:', error);
     return {
@@ -66,16 +97,23 @@ export function isAIValidationAvailable() {
 }
 
 /**
- * 백엔드 헬스 체크
+ * Vercel Serverless Function 헬스 체크 (선택적)
  * @returns {Promise<boolean>}
  */
 export async function checkBackendHealth() {
+  // Vercel 배포 환경에서는 헬스 체크가 필요 없음
+  if (import.meta.env.PROD) {
+    return true;
+  }
+
+  // 개발 환경에서만 체크
   try {
-    const response = await fetch(`${API_BASE_URL}/api/health`);
-    const data = await response.json();
-    return data.status === 'ok' && data.geminiConfigured;
+    const response = await fetch(`${API_BASE_URL}/api/validate-contracts`, {
+      method: 'OPTIONS',
+    });
+    return response.ok;
   } catch (error) {
-    console.warn('⚠️ 백엔드 서버에 연결할 수 없습니다:', error.message);
+    console.warn('⚠️ API 엔드포인트에 연결할 수 없습니다:', error.message);
     return false;
   }
 }

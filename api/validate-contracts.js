@@ -1,54 +1,57 @@
-import express from 'express';
-import cors from 'cors';
-import multer from 'multer';
+// api/validate-contracts.js - Vercel Serverless Function for AI Contract Validation
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import fs from 'fs/promises';
 
-// ES Module에서 __dirname 대체
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Vercel Serverless Functions config
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '50mb',
+    },
+  },
+  maxDuration: 60, // 최대 60초 실행 (Vercel Pro 플랜 필요)
+};
 
-// 환경 변수 로드
-dotenv.config();
+export default async function handler(req, res) {
+  // CORS 설정
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Preflight 요청 처리
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
 
-const app = express();
-const PORT = process.env.PORT || 3001;
+  // POST만 허용
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-// Gemini AI 초기화
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-// 미들웨어
-app.use(cors());
-app.use(express.json());
-
-// 메모리 저장소 설정 (파일은 메모리에만 저장)
-const upload = multer({ 
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB
-});
-
-/**
- * POST /api/validate-contracts
- * PDF 파일과 파싱 데이터를 받아 Gemini로 검증
- */
-app.post('/api/validate-contracts', upload.single('pdf'), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'PDF 파일이 필요합니다.' });
+    const { pdfBase64, parsedData } = req.body;
+
+    if (!pdfBase64) {
+      return res.status(400).json({ error: 'pdfBase64가 필요합니다.' });
     }
 
-    if (!req.body.parsedData) {
-      return res.status(400).json({ error: '파싱 데이터가 필요합니다.' });
+    if (!parsedData) {
+      return res.status(400).json({ error: 'parsedData가 필요합니다.' });
     }
 
-    const parsedData = JSON.parse(req.body.parsedData);
-    const pdfBuffer = req.file.buffer;
+    // 환경 변수에서 API 키 가져오기 (서버에서만 접근 가능)
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY가 설정되지 않았습니다' });
+    }
 
     console.log('🤖 AI 검증 요청 수신');
 
+    // Gemini AI 초기화
+    const genAI = new GoogleGenerativeAI(apiKey);
+    
     // Gemini 2.0 Flash 모델 설정
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.0-flash-exp',
@@ -61,10 +64,10 @@ app.post('/api/validate-contracts', upload.single('pdf'), async (req, res) => {
       },
     });
 
-    // PDF를 Base64로 변환
+    // PDF 데이터 구성
     const pdfData = {
       inlineData: {
-        data: pdfBuffer.toString('base64'),
+        data: pdfBase64,
         mimeType: 'application/pdf',
       },
     };
@@ -148,47 +151,33 @@ ${JSON.stringify(parsedData.계약리스트 || [], null, 2)}
 
     // Gemini API 호출
     const result = await model.generateContent([prompt, pdfData]);
-    const responseText = result.response.text();
+    const response = await result.response;
+    const text = response.text();
 
-    console.log('✅ Gemini 검증 완료');
+    console.log('✅ AI 검증 완료');
 
     // JSON 파싱
-    const validatedData = JSON.parse(responseText);
+    let validatedData;
+    try {
+      validatedData = JSON.parse(text);
+    } catch (parseError) {
+      // JSON 파싱 실패 시 마크다운 코드 블록 제거 시도
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const jsonText = jsonMatch[1] || jsonMatch[0];
+        validatedData = JSON.parse(jsonText);
+      } else {
+        throw new Error('AI 응답을 JSON으로 파싱할 수 없습니다.');
+      }
+    }
 
-    res.json({
-      validated: true,
-      data: {
-        ...parsedData,
-        계약리스트: validatedData.계약리스트 || parsedData.계약리스트,
-      },
-      corrections: validatedData.수정사항 || [],
-      totalPremium: validatedData.총보험료,
-      activePremium: validatedData.활성월보험료,
-      message: 'Validated by Gemini 2.0 Flash',
-    });
+    return res.status(200).json(validatedData);
+
   } catch (error) {
-    console.error('❌ AI 검증 오류:', error);
-    res.status(500).json({
-      validated: false,
+    console.error('❌ AI 검증 중 오류:', error);
+    return res.status(500).json({ 
       error: error.message,
-      message: 'Validation failed',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
-});
-
-/**
- * GET /api/health
- * 헬스 체크
- */
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    geminiConfigured: !!process.env.GEMINI_API_KEY 
-  });
-});
-
-// 서버 시작
-app.listen(PORT, () => {
-  console.log(`🚀 서버 시작: http://localhost:${PORT}`);
-  console.log(`🔑 Gemini API 키: ${process.env.GEMINI_API_KEY ? '설정됨 ✅' : '미설정 ❌'}`);
-});
+}
