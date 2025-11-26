@@ -5,6 +5,15 @@ compatibility_date = "2024-11-25"
 # Pages-specific settings
 pages_build_output_dir = "dist"
 
+# Increase CPU time limit for AI processing (Pages Functions)
+# Note: Pages Functions have different limits than Workers
+# Free Plan: 10ms CPU time limit per request
+# Paid Plan ($5/month): 30000ms (30 seconds) CPU time
+# Large PDF processing (6-7MB) requires Paid Plan for reliable operation
+# Current setting attempts to use maximum free tier limit
+[limits]
+cpu_ms = 50
+
 # Environment Variables
 [vars]
 VITE_USE_AI_VALIDATION = "true"
