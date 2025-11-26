@@ -1,9 +1,0 @@
-# Cloudflare Pages Configuration
-name = "insu-report"
-compatibility_date = "2024-11-25"
-
-# Pages deployment configuration
-pages_build_output_dir = "dist"
-
-# This tells wrangler this is a Pages project, not a Workers project
-# When using 'npx wrangler deploy', it will deploy as Pages
