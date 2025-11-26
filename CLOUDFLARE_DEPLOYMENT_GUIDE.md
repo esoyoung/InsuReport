@@ -2,6 +2,16 @@
 
 **목표:** Vercel 대신 Cloudflare로 단일화 (Pages + Workers + R2)
 
+
+## 🪄 Cloudflare 전용 브랜치
+
+- 작업 브랜치: `cloudflare-only`
+- 목표: Vercel 구성/엔드포인트를 배제하고 Cloudflare Pages Functions + R2 조합으로 단일화
+- 주요 변경 사항:
+  - `/api/upload-pdf`, `/api/validate-contracts`, `/api/validate-contracts-r2`를 Pages Functions로 제공
+  - 프론트엔드 업로드 로직이 Cloudflare Functions를 직접 호출하도록 수정
+  - CORS 헤더를 Functions 미들웨어에서 통합 관리
+
 ---
 
 ## 🎯 **아키텍처**
@@ -188,6 +198,17 @@ webapp/
 
 ### **해결:**
 
+#### 1) Node 버전/`wrangler` 버전 불일치 (로그: Wrangler requires Node.js v20)
+- Cloudflare Pages 기본 빌드 환경은 Node 18.x입니다.
+- `npx wrangler deploy`는 최신 v4를 받아와 Node 20을 요구하므로 배포가 실패합니다.
+
+**대안:**
+- Deploy command를 `npx wrangler@3 pages deploy dist --project-name=insu-report`로 고정하거나,
+- Dashboard에서 `Deploy command: ./scripts/deploy-cloudflare-pages.sh`로 설정 (내부에서 `wrangler@3` 사용),
+- 또는 Build settings → Node version을 20으로 올린 뒤 `wrangler@4`를 쓰는 방법 중 하나를 선택하세요.
+
+> Pages Functions만 배포할 때는 `wrangler@3 pages deploy`가 Node 18 환경에서 가장 안전합니다.
+
 #### **Option 1: Workers 배포 (독립)**
 ```bash
 cd cloudflare-workers
@@ -197,9 +218,23 @@ npx wrangler deploy
 #### **Option 2: Pages 배포 (통합)**
 ```bash
 # Cloudflare Dashboard에서 배포 (CLI 아님)
-# 또는
-npx wrangler pages deploy dist --project-name=insu-report
+# 또는 (Cloudflare 빌드 노드 18.x 대응)
+npx wrangler@3 pages deploy dist --project-name=insu-report
 ```
+
+#### **Deploy Command가 잘못된 경우 (Workers로 빌드되는 경우)**
+- Dashboard의 **Deploy command**를 `./scripts/deploy-cloudflare-pages.sh`로 교체하세요.
+- 이 스크립트는 `wrangler deploy`를 사용하지 않고 **강제로 `wrangler@3 pages deploy`**를 실행합니다.
+
+```bash
+# Pages → Settings → Builds & deployments → Build configuration
+Build command: npm run build
+Build output directory: dist
+Deploy command: ./scripts/deploy-cloudflare-pages.sh
+```
+
+> Deploy command를 비워둘 수 없을 때 더미 echo 대신 위 스크립트를 사용하면
+> Workers 빌드로 잘못 전환되는 문제를 방지할 수 있습니다.
 
 ---
 
