@@ -10,6 +10,9 @@ function FileUploader() {
   const [validationStatus, setValidationStatus] = useState(null);
 
   const handleFileUpload = useCallback(async (event) => {
+    // 디버깅: AI 검증 상태 확인
+    console.log('🔍 AI 검증 가능 여부:', isAIValidationAvailable());
+    console.log('🔍 VITE_USE_AI_VALIDATION:', import.meta.env.VITE_USE_AI_VALIDATION);
     let file = event.target.files?.[0];
     if (!file) return;
 
