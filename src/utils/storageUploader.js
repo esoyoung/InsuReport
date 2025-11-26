@@ -1,6 +1,5 @@
 /**
- * R2 스토리지를 사용한 대용량 PDF 업로드
- * Vercel 4.5MB 페이로드 제한을 회피하기 위해 클라이언트에서 R2로 직접 업로드
+ * R2 스토리지를 사용한 대용량 PDF 업로드 (Cloudflare Pages Functions)
  */
 
 /**
@@ -12,45 +11,25 @@ export async function uploadToR2(file) {
   try {
     console.log(`📤 R2 업로드 시작: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
 
-    // 1단계: Pre-signed URL 요청
-    const urlResponse = await fetch('/api/get-upload-url', {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const uploadResponse = await fetch('/api/upload-pdf', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        fileName: file.name,
-        contentType: file.type,
-      }),
-    });
-
-    if (!urlResponse.ok) {
-      const errorData = await urlResponse.json();
-      throw new Error(errorData.error || `Pre-signed URL 생성 실패: ${urlResponse.status}`);
-    }
-
-    const { uploadUrl, fileKey, expiresIn } = await urlResponse.json();
-    console.log(`✅ Pre-signed URL 생성 완료: ${fileKey}`);
-
-    // 2단계: R2에 직접 업로드
-    console.log('📤 R2에 파일 업로드 중...');
-    const uploadResponse = await fetch(uploadUrl, {
-      method: 'PUT',
-      body: file,
-      headers: {
-        'Content-Type': file.type,
-      },
+      body: formData,
     });
 
     if (!uploadResponse.ok) {
-      throw new Error(`R2 업로드 실패: ${uploadResponse.status} ${uploadResponse.statusText}`);
+      const errorData = await uploadResponse.json().catch(() => ({}));
+      throw new Error(errorData.error || `R2 업로드 실패: ${uploadResponse.status}`);
     }
 
+    const { fileKey, size } = await uploadResponse.json();
     console.log(`✅ R2 업로드 완료: ${fileKey}`);
 
     return {
       fileKey,
-      size: file.size,
+      size: size || file.size,
       uploadedAt: new Date().toISOString(),
     };
 
@@ -87,9 +66,9 @@ export async function validateContractsWithR2(fileKey, parsedData) {
     }
 
     const result = await response.json();
-    
+
     console.log('✅ R2 기반 AI 검증 완료');
-    
+
     if (result.수정사항?.length > 0) {
       console.log('📝 AI 수정 사항:', result.수정사항);
     }
@@ -119,7 +98,7 @@ export async function validateContractsWithR2(fileKey, parsedData) {
 export async function isR2Available() {
   try {
     // Health check용 더미 요청
-    const response = await fetch('/api/get-upload-url', {
+    const response = await fetch('/api/upload-pdf', {
       method: 'OPTIONS',
     });
     return response.ok;

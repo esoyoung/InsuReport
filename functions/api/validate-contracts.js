@@ -1,4 +1,4 @@
-// Cloudflare Pages Function for AI Validation (R2-based)
+// Cloudflare Pages Function for direct PDF AI validation
 import {
   validateWithEnsemble,
   validateWithGemini,
@@ -10,57 +10,35 @@ export async function onRequestPost(context) {
   const { request, env } = context;
 
   try {
-    const { fileKey, parsedData, model = 'auto' } = await request.json();
+    const { pdfBase64, parsedData, model = 'auto' } = await request.json();
 
-    if (!fileKey || !parsedData) {
+    if (!pdfBase64 || !parsedData) {
       return new Response(JSON.stringify({
-        error: 'fileKey and parsedData required'
+        error: 'pdfBase64 and parsedData required'
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    console.log(`🤖 AI validation: ${fileKey}, model: ${model}`);
+    console.log(`🤖 Direct AI validation (model: ${model})`);
     const startTime = Date.now();
 
-    // Get PDF from R2
-    const pdfObject = await env.PDF_BUCKET.get(fileKey);
-
-    if (!pdfObject) {
-      return new Response(JSON.stringify({
-        error: `PDF not found: ${fileKey}`
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Convert to base64
-    const pdfArrayBuffer = await pdfObject.arrayBuffer();
-    const pdfBase64 = arrayBufferToBase64(pdfArrayBuffer);
-    const pdfSizeMB = (pdfArrayBuffer.byteLength / 1024 / 1024).toFixed(2);
-
-    console.log(`✅ PDF loaded: ${pdfSizeMB}MB`);
-
-    // Call AI
     const validatedData = await callAI(pdfBase64, parsedData, model, env);
-
     const duration = Date.now() - startTime;
+
     console.log(`✅ Completed in ${duration}ms`);
 
     return new Response(JSON.stringify({
       ...validatedData,
       _metadata: {
         processingTime: duration,
-        pdfSize: `${pdfSizeMB}MB`,
         aiModel: validatedData.model || model
       }
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
-
   } catch (error) {
     console.error('❌ Error:', error);
     return new Response(JSON.stringify({
@@ -85,13 +63,4 @@ async function callAI(pdfBase64, parsedData, model, env) {
     default:
       return await validateWithEnsemble(pdfBase64, parsedData, env);
   }
-}
-
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
 }

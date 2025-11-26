@@ -2,20 +2,20 @@
 // Add CORS headers and R2 binding
 
 export async function onRequest(context) {
-  const { request, next, env } = context;
+  const { request, next } = context;
 
   // CORS headers
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
   };
 
   // Handle CORS preflight
   if (request.method === 'OPTIONS') {
-    return new Response(null, { 
+    return new Response(null, {
       status: 204,
-      headers: corsHeaders 
+      headers: corsHeaders
     });
   }
 
