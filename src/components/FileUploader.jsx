@@ -29,15 +29,14 @@ function FileUploader() {
       // 0단계: PDF 크기 확인 및 R2 경로 결정
       const fileSizeMB = file.size / (1024 * 1024);
       const useR2 = shouldUseR2(file, 2.8); // 2.8MB 초과 시 R2 사용
-      // Free Plan CPU Limit: 3MB 초과 시 AI 검증 스킵 (Error 1102 방지)
-      // Paid Plan ($5/month)을 사용하면 10MB까지 가능
-      const skipAIForLarge = fileSizeMB > 3; // 3MB 초과 시 AI 검증 스킵
+      // Paid Plan ($5/month): 10MB까지 AI 검증 가능 (30초 CPU time)
+      const skipAIForLarge = fileSizeMB > 10; // 10MB 초과 시 AI 검증 스킵
 
       if (useR2) {
         console.log(`📦 대용량 PDF 감지 (${fileSizeMB.toFixed(2)}MB > 2.8MB), R2 경로 사용`);
         
         if (skipAIForLarge) {
-          console.log(`⚠️ 대용량 PDF (${fileSizeMB.toFixed(2)}MB > 3MB), AI 검증 스킵 (Free Plan CPU 제한)`);
+          console.log(`⚠️ 초대용량 PDF (${fileSizeMB.toFixed(2)}MB > 10MB), AI 검증 스킵 (할당량 절약)`);
         }
         
         try {
@@ -82,8 +81,8 @@ function FileUploader() {
             }
           } else {
             if (skipAIForLarge) {
-              console.log('💡 3MB 초과 PDF는 규칙 기반 파싱만 사용 (Free Plan CPU 제한)');
-              setValidationStatus('PDF 처리 완료 (규칙 기반, Paid Plan으로 AI 검증 가능)');
+              console.log('💡 10MB 초과 PDF는 규칙 기반 파싱만 사용 (Gemini 할당량 절약)');
+              setValidationStatus('대용량 PDF 처리 완료 (규칙 기반)');
             }
             setParsedData(data);
           }
