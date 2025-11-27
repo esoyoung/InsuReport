@@ -10,19 +10,19 @@
  * 📊 AVAILABLE MODELS (status as of 2025-11-27)
  * ============================================================================
  * 
- * ✅ Claude 3.5 Haiku (Anthropic) - ACTIVE 🚀
- *    - Cost: ~$8/1000 calls (4-page PDF) - 92% CHEAPER!
+ * ✅ Claude Sonnet 4.5 (Anthropic) - ACTIVE
+ *    - Cost: ~$100/1000 calls (4-page PDF)
  *    - API Key: ANTHROPIC_API_KEY ✓ configured
  *    - PDF Vision: ✓ Direct PDF processing
  *    - Korean: ✓ Excellent support
- *    - Speed: 2-3x faster than Sonnet
- *    - Status: Testing cost optimization
- *    - Model: claude-3-5-haiku-20241022 (working)
- * 
- * 🔄 Claude Sonnet 4.5 (Anthropic) - BACKUP
- *    - Cost: ~$100/1000 calls (4-page PDF)
- *    - Best for: High accuracy if Haiku insufficient
+ *    - Status: Stable, accurate JSON output
+ *    - Best for: Accurate PDF parsing, no item omission
  *    - Model: claude-sonnet-4-5-20250929
+ * 
+ * ⚠️ Claude 3.5 Haiku (Anthropic) - NOT RECOMMENDED
+ *    - Cost: ~$8/1000 calls (92% cheaper)
+ *    - Issue: Poor JSON format compliance
+ *    - Model: claude-3-5-haiku-20241022
  * 
  * 🔄 GPT-4o (OpenAI) - AVAILABLE
  *    - Cost: ~$10/1000 calls (4-page PDF)
@@ -36,9 +36,8 @@
  */
 
 /**
- * Claude 3.5 Haiku - Primary Model (Cost Optimization)
- * Note: Haiku 4.5 models return 404, using 3.5 Haiku instead
- * Switch to 'claude-sonnet-4-5-20250929' if accuracy insufficient
+ * Claude Sonnet 4.5 - Primary Model (Stable & Accurate)
+ * Reverted from Haiku due to poor JSON format compliance
  */
 export async function validateWithClaude(pdfBase64, parsedData, env) {
   const apiKey = env.ANTHROPIC_API_KEY;
@@ -57,7 +56,7 @@ export async function validateWithClaude(pdfBase64, parsedData, env) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-3-5-haiku-20241022',  // Claude 3.5 Haiku (works, cheaper than Sonnet)
+      model: 'claude-sonnet-4-5-20250929',  // Sonnet 4.5 for stable JSON output
       max_tokens: 8192,
       temperature: 0.1,
       messages: [
