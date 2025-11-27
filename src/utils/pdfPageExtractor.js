@@ -91,43 +91,47 @@ export function identifyEssentialPages(pages) {
     essentialPages.add(1); // 표지가 감지 안되면 1페이지 강제 추가
   }
   
-  // 2. 계약 리스트 (5p 등) - 시작 페이지부터 다음 섹션 전까지
+  // 2. 계약 리스트 (5p 등) - 실제 범위 확인
   const contractStartIndex = pages.findIndex(p => p.type === 'CONTRACT_LIST');
+  let contractPages = 0;
+  
   if (contractStartIndex !== -1) {
     const contractStartPage = pages[contractStartIndex].pageNum;
     
-    // 계약 리스트가 여러 페이지에 걸쳐 있을 수 있음
-    // 다음 섹션(실효/해지 또는 진단현황)이 나올 때까지 모두 포함
+    // 다음 섹션 찾기
     let contractEndPage = contractStartPage;
-    
     for (let i = contractStartIndex + 1; i < pages.length; i++) {
       const pageType = pages[i].type;
       if (pageType === 'TERMINATED_LIST' || pageType === 'DIAGNOSIS') {
         contractEndPage = pages[i].pageNum - 1;
         break;
       }
-      // 마지막 페이지까지 계약 리스트인 경우
       if (i === pages.length - 1) {
         contractEndPage = pages[i].pageNum;
       }
     }
     
-    // 계약 리스트 페이지 모두 추가 (최대 2페이지)
-    for (let p = contractStartPage; p <= Math.min(contractEndPage, contractStartPage + 1); p++) {
+    // 실제 계약 리스트 범위 계산
+    const actualContractPages = contractEndPage - contractStartPage + 1;
+    contractPages = Math.min(actualContractPages, 2); // 최대 2페이지
+    
+    // 페이지 추가
+    for (let p = contractStartPage; p < contractStartPage + contractPages; p++) {
       essentialPages.add(p);
     }
     
-    console.log(`  📋 계약 리스트: Page ${contractStartPage}-${contractEndPage}`);
+    console.log(`  📋 계약 리스트: Page ${contractStartPage}${contractPages > 1 ? `-${contractStartPage + contractPages - 1}` : ''} (${contractPages}페이지)`);
   }
   
-  // 3. 실효/해지 계약 (있으면 포함, 없으면 스킵)
+  // 3. 실효/해지 계약 (있으면 포함)
   const terminatedStartIndex = pages.findIndex(p => p.type === 'TERMINATED_LIST');
+  let terminatedPages = 0;
+  
   if (terminatedStartIndex !== -1) {
     const terminatedStartPage = pages[terminatedStartIndex].pageNum;
     
-    // 실효/해지도 여러 페이지일 수 있음 (최대 2페이지)
+    // 다음 섹션(진단현황) 찾기
     let terminatedEndPage = terminatedStartPage;
-    
     for (let i = terminatedStartIndex + 1; i < pages.length; i++) {
       const pageType = pages[i].type;
       if (pageType === 'DIAGNOSIS') {
@@ -139,33 +143,48 @@ export function identifyEssentialPages(pages) {
       }
     }
     
-    for (let p = terminatedStartPage; p <= Math.min(terminatedEndPage, terminatedStartPage + 1); p++) {
+    // 실제 실효/해지 범위 계산
+    const actualTerminatedPages = terminatedEndPage - terminatedStartPage + 1;
+    terminatedPages = Math.min(actualTerminatedPages, 2); // 최대 2페이지
+    
+    // 페이지 추가
+    for (let p = terminatedStartPage; p < terminatedStartPage + terminatedPages; p++) {
       essentialPages.add(p);
     }
     
-    console.log(`  📋 실효/해지: Page ${terminatedStartPage}-${terminatedEndPage}`);
+    console.log(`  📋 실효/해지: Page ${terminatedStartPage}${terminatedPages > 1 ? `-${terminatedStartPage + terminatedPages - 1}` : ''} (${terminatedPages}페이지)`);
   } else {
     console.log(`  ⚠️ 실효/해지 계약 없음 (스킵)`);
   }
   
-  // 4. 진단 현황 (12p, 18p 등) - 시작 페이지부터 끝까지 (최대 2페이지)
+  // 4. 진단 현황 (12p, 18p 등) - 항상 1페이지만
   const diagnosisStartIndex = pages.findIndex(p => p.type === 'DIAGNOSIS');
   if (diagnosisStartIndex !== -1) {
     const diagnosisStartPage = pages[diagnosisStartIndex].pageNum;
     
-    // 진단 현황도 여러 페이지일 수 있음 (최대 2페이지)
-    const diagnosisEndPage = Math.min(diagnosisStartPage + 1, pages[pages.length - 1].pageNum);
+    // 진단 현황은 1페이지만 (31개 담보가 1페이지에 다 들어감)
+    essentialPages.add(diagnosisStartPage);
     
-    for (let p = diagnosisStartPage; p <= diagnosisEndPage; p++) {
-      essentialPages.add(p);
-    }
-    
-    console.log(`  📋 진단 현황: Page ${diagnosisStartPage}-${diagnosisEndPage}`);
+    console.log(`  📋 진단 현황: Page ${diagnosisStartPage} (1페이지)`);
   }
   
   const sortedPages = Array.from(essentialPages).sort((a, b) => a - b);
   
-  console.log(`✅ 필수 페이지 식별 완료: ${sortedPages.length}페이지`);
+  // 케이스 분류
+  let caseDescription = '';
+  if (terminatedPages === 0 && contractPages === 1) {
+    caseDescription = '케이스 1: 해지 없음 + 계약 1p';
+  } else if (terminatedPages > 0 && contractPages === 1 && terminatedPages === 1) {
+    caseDescription = '케이스 2: 해지 있음 + 계약 1p + 해지 1p';
+  } else if (contractPages === 2 && terminatedPages === 1) {
+    caseDescription = '케이스 3: 계약 2p + 해지 1p';
+  } else if (contractPages === 2 && terminatedPages === 2) {
+    caseDescription = '케이스 4: 계약 2p + 해지 2p';
+  } else {
+    caseDescription = `기타: 계약 ${contractPages}p + 해지 ${terminatedPages}p`;
+  }
+  
+  console.log(`✅ 필수 페이지 식별 완료: ${sortedPages.length}페이지 (${caseDescription})`);
   console.log(`  → ${sortedPages.join(', ')}`);
   
   return sortedPages;
