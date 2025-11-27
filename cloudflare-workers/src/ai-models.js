@@ -63,7 +63,7 @@ export async function validateWithGemini(pdfBase64, parsedData, env) {
   const prompt = buildPrompt(parsedData);
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -92,10 +92,12 @@ export async function validateWithGemini(pdfBase64, parsedData, env) {
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error(`Gemini API error: ${response.status}`, errorText);
     throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
   }
 
   const result = await response.json();
+  console.log('Gemini response structure:', JSON.stringify(result).substring(0, 500));
   return parseAIResponse(result.candidates?.[0]?.content?.parts?.[0]?.text);
 }
 

@@ -89,7 +89,9 @@ export async function onRequestPost(context) {
   } catch (error) {
     console.error('❌ Error:', error);
     return new Response(JSON.stringify({
-      error: error.message
+      error: error.message,
+      stack: error.stack,
+      details: error.toString()
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
