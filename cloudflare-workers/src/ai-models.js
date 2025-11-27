@@ -10,6 +10,7 @@
 
 /**
  * Cloudflare Workers AI - Edge AI (No API key needed)
+ * Using Llama 3.2 Vision (11B) model
  */
 export async function validateWithCloudflareAI(pdfBase64, parsedData, env) {
   if (!env.AI) {
@@ -19,33 +20,36 @@ export async function validateWithCloudflareAI(pdfBase64, parsedData, env) {
   const prompt = buildPrompt(parsedData);
 
   try {
-    // Cloudflare Workers AI uses the AI binding
-    // Using Qwen2-VL for vision tasks (no license agreement needed)
-    const response = await env.AI.run('@cf/qwen/qwen2-vl-7b-instruct', {
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:application/pdf;base64,${pdfBase64}`
-              }
-            }
-          ]
-        }
-      ],
-      temperature: 0.1,
+    // Step 1: Accept license terms (required for Llama 3.2)
+    try {
+      await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+        prompt: 'agree',
+        max_tokens: 10
+      });
+      console.log('✅ Llama 3.2 license accepted');
+    } catch (licenseError) {
+      // License already accepted or error, continue anyway
+      console.log('⚠️ License acceptance:', licenseError.message);
+    }
+
+    // Step 2: Run actual inference
+    // Note: Cloudflare AI vision models require image input, not PDF
+    // For PDF processing, we need to convert PDF to images first
+    const response = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+      prompt: prompt,
+      image: [pdfBase64], // Base64 image data
       max_tokens: 8192
     });
 
+    console.log('Cloudflare AI raw response:', JSON.stringify(response).substring(0, 500));
+
     // Parse response
-    const result = response.response || response.result || response;
+    const result = response.response || response.result || response.description || response;
     return parseAIResponse(typeof result === 'string' ? result : JSON.stringify(result));
     
   } catch (error) {
     console.error('Cloudflare AI error:', error);
+    console.error('Cloudflare AI error stack:', error.stack);
     throw new Error(`Cloudflare AI error: ${error.message}`);
   }
 }
@@ -203,38 +207,38 @@ export async function validateWithClaude(pdfBase64, parsedData, env) {
 
 /**
  * Ensemble: Primary-Fallback strategy
+ * Priority: Cloudflare AI → GPT-4o → Claude
  */
 export async function validateWithEnsemble(pdfBase64, parsedData, env) {
-  console.log('🔀 Starting ensemble validation (Gemini → GPT-4o → Claude)');
+  console.log('🔀 Starting ensemble validation (Cloudflare AI → GPT-4o → Claude)');
 
-  // 1st: Try Gemini (Fast & Cheap)
-  if (env.GEMINI_API_KEY) {
+  // 1st: Try Cloudflare Workers AI (No API key, monthly billing)
+  if (env.AI) {
     try {
-      console.log('🔄 Trying Gemini API...');
-      const geminiResult = await validateWithGemini(pdfBase64, parsedData, env);
-      const confidence = calculateConfidence(geminiResult);
+      console.log('🔄 Trying Cloudflare AI...');
+      const cfAIResult = await validateWithCloudflareAI(pdfBase64, parsedData, env);
+      const confidence = calculateConfidence(cfAIResult);
       
-      console.log(`✅ Gemini result - Confidence: ${(confidence * 100).toFixed(1)}%`);
+      console.log(`✅ Cloudflare AI result - Confidence: ${(confidence * 100).toFixed(1)}%`);
       
-      // Gemini가 성공하면 바로 반환 (confidence 체크 완화)
       if (confidence > 0.7) {
         return { 
-          model: 'gemini', 
+          model: 'cloudflare-ai', 
           confidence,
-          ...geminiResult 
+          ...cfAIResult 
         };
       }
       
-      console.log(`⚠️ Gemini confidence low (${(confidence * 100).toFixed(1)}%), trying GPT-4o...`);
+      console.log(`⚠️ Cloudflare AI confidence low (${(confidence * 100).toFixed(1)}%), trying GPT-4o...`);
     } catch (error) {
-      console.error('❌ Gemini failed:', error.message);
-      console.error('❌ Gemini full error:', error);
+      console.error('❌ Cloudflare AI failed:', error.message);
+      console.error('❌ Cloudflare AI error details:', error.stack);
     }
   } else {
-    console.log('⚠️ GEMINI_API_KEY not configured, skipping Gemini');
+    console.log('⚠️ Cloudflare AI binding not configured, skipping');
   }
 
-  // 3rd: Try GPT-4o (High Accuracy)
+  // 2nd: Try GPT-4o (High Accuracy)
   if (env.OPENAI_API_KEY) {
     try {
       console.log('🔄 Trying GPT-4o...');

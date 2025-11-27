@@ -14,27 +14,33 @@ export async function onRequestGet(context) {
     tests: []
   };
 
-  // Test 1: Cloudflare AI Binding
+  // Test 1: Cloudflare AI Binding (Llama 3.2 11B Vision)
   if (env.AI) {
     try {
-      const response = await env.AI.run('@cf/qwen/qwen2-vl-7b-instruct', {
-        messages: [
-          {
-            role: 'user',
-            content: 'Reply with just "OK" if you can read this message.'
-          }
-        ],
+      // Accept license first
+      try {
+        await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+          prompt: 'agree',
+          max_tokens: 10
+        });
+      } catch (licenseError) {
+        // Ignore license errors
+      }
+
+      // Run actual test
+      const response = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+        prompt: 'Reply with just "OK" if you can read this message.',
         max_tokens: 10
       });
       
       testResults.tests.push({
-        name: 'Cloudflare AI',
+        name: 'Cloudflare AI (Llama 3.2 11B Vision)',
         status: 'success',
         response: response
       });
     } catch (error) {
       testResults.tests.push({
-        name: 'Cloudflare AI',
+        name: 'Cloudflare AI (Llama 3.2 11B Vision)',
         status: 'error',
         error: error.message,
         stack: error.stack
