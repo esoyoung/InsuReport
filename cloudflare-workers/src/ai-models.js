@@ -10,19 +10,17 @@
  * 📊 AVAILABLE MODELS (status as of 2025-11-27)
  * ============================================================================
  * 
- * ✅ Claude Haiku 4.5 (Anthropic) - ACTIVE 🚀 TESTING
- *    - Cost: ~$33/1000 calls (4-page PDF) - 67% CHEAPER than Sonnet!
+ * ✅ Claude Sonnet 4.5 (Anthropic) - ACTIVE
+ *    - Cost: ~$100/1000 calls (4-page PDF)
  *    - API Key: ANTHROPIC_API_KEY ✓ configured
  *    - PDF Vision: ✓ Direct PDF processing
  *    - Korean: ✓ Excellent support
- *    - Status: Testing for cost optimization
- *    - Best for: Fast & economical PDF parsing
- *    - Speed: 2-3x faster than Sonnet
+ *    - Status: Working, ready to use
+ *    - Best for: Accurate PDF parsing, no item omission
  * 
- * 🔄 Claude Sonnet 4.5 (Anthropic) - BACKUP
- *    - Cost: ~$100/1000 calls (4-page PDF)
- *    - Best for: Complex reasoning, high accuracy
- *    - Use if: Haiku accuracy insufficient
+ * ⚠️ Claude Haiku 4.5 (Anthropic) - NOT AVAILABLE YET
+ *    - Model ID 'claude-haiku-4-5-20250929' returns 404
+ *    - Will test when officially released
  * 
  * 🔄 GPT-4o (OpenAI) - AVAILABLE
  *    - Cost: ~$10/1000 calls (4-page PDF)
@@ -36,8 +34,8 @@
  */
 
 /**
- * Claude Haiku 4.5 - Primary Model (TESTING - Cost Optimization)
- * Switch to 'claude-sonnet-4-5-20250929' if accuracy is insufficient
+ * Claude Sonnet 4.5 - Primary Model
+ * Reverted from Haiku 4.5 (model not found error)
  */
 export async function validateWithClaude(pdfBase64, parsedData, env) {
   const apiKey = env.ANTHROPIC_API_KEY;
@@ -56,7 +54,7 @@ export async function validateWithClaude(pdfBase64, parsedData, env) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20250929',  // Changed from Sonnet to Haiku for cost optimization
+      model: 'claude-sonnet-4-5-20250929',  // Reverted to Sonnet for accuracy
       max_tokens: 8192,
       temperature: 0.1,
       messages: [
@@ -171,11 +169,16 @@ A. 보유 계약 리스트
   - 이 값을 그대로 "총보험료"와 "활성월보험료"에 사용
   - **다시 강조**: 계약 리스트에서 합산하지 마세요 - 우측 상단 필드에서 직접 읽으세요
 
-B. 진단현황 ⚠️ **매우 중요 - 누락 금지**
-- 12페이지 "담보별 진단현황" 표에서 **모든 행** 추출
-- **필수**: 테이블의 모든 진단 항목을 빠짐없이 추출하세요
+B. 진단현황 ⚠️ **🚨 매우 중요 - 절대 누락 금지 🚨**
+- ⚠️ **12페이지 또는 18페이지 "담보별 진단현황" 표에서 모든 행을 빠짐없이 추출하세요**
+- ⚠️ **테이블의 모든 행을 스캔하여 하나도 빠뜨리지 마세요**
+- ⚠️ **다음 항목들이 자주 누락되니 반드시 확인하세요**:
+  - "상해80%미만후유장해", "질병80%미만후유장해"
+  - "경증치매진단"
+  - "간병인/간호간병상해일당", "자동차사고보상"
+  - 기타 모든 진단 항목
 - 각 항목마다 다음 필드 추출:
-  - 진단명: 정확한 이름 (예: "사망", "암진단", "뇌출혈진단" 등)
+  - 진단명: 정확한 이름 (예: "사망", "암진단", "뇌출혈진단", "상해80%미만후유장해" 등)
   - 권장금액: 표에서 읽은 그대로 (숫자만)
   - 가입금액: 표에서 읽은 그대로 (숫자만)
   - 부족금액: **반드시 계산** = 권장금액 - 가입금액
@@ -183,7 +186,8 @@ B. 진단현황 ⚠️ **매우 중요 - 누락 금지**
     - 음수(-): 초과 → colorClass: "text-blue-600"
     - 0: 충족 → colorClass: ""
   - 상태: 부족(<70%), 주의(70-99%), 충분(≥100%), 미가입(0)
-- **중요**: 참고 데이터에 31개 있으면 PDF에서도 31개 모두 찾아야 함
+- **🔴 절대 규칙**: 참고 데이터에 32개 있으면 PDF 표에서도 32개 모두 찾아서 반환하세요
+- **🔴 다시 한번**: 테이블을 위에서 아래까지 전부 스캔하여 모든 행을 추출하세요
 
 C. 실효/해지계약
 - 섹션 있으면 추출, 없으면 []
