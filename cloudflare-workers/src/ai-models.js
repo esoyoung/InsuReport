@@ -10,14 +10,14 @@
  * 📊 AVAILABLE MODELS (status as of 2025-11-27)
  * ============================================================================
  * 
- * ✅ Claude Haiku 4.5 (Anthropic) - ACTIVE 🚀
- *    - Cost: ~$33/1000 calls (4-page PDF) - 67% CHEAPER!
+ * ✅ Claude 3.5 Haiku (Anthropic) - ACTIVE 🚀
+ *    - Cost: ~$8/1000 calls (4-page PDF) - 92% CHEAPER!
  *    - API Key: ANTHROPIC_API_KEY ✓ configured
  *    - PDF Vision: ✓ Direct PDF processing
  *    - Korean: ✓ Excellent support
  *    - Speed: 2-3x faster than Sonnet
  *    - Status: Testing cost optimization
- *    - Model: claude-haiku-4-5-20250901 (latest)
+ *    - Model: claude-3-5-haiku-20241022 (working)
  * 
  * 🔄 Claude Sonnet 4.5 (Anthropic) - BACKUP
  *    - Cost: ~$100/1000 calls (4-page PDF)
@@ -36,7 +36,8 @@
  */
 
 /**
- * Claude Haiku 4.5 - Primary Model (Cost Optimization)
+ * Claude 3.5 Haiku - Primary Model (Cost Optimization)
+ * Note: Haiku 4.5 models return 404, using 3.5 Haiku instead
  * Switch to 'claude-sonnet-4-5-20250929' if accuracy insufficient
  */
 export async function validateWithClaude(pdfBase64, parsedData, env) {
@@ -56,7 +57,7 @@ export async function validateWithClaude(pdfBase64, parsedData, env) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20250901',  // Haiku 4.5 latest for 67% cost savings
+      model: 'claude-3-5-haiku-20241022',  // Claude 3.5 Haiku (works, cheaper than Sonnet)
       max_tokens: 8192,
       temperature: 0.1,
       messages: [
