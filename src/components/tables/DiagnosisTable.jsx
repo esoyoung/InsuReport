@@ -274,7 +274,7 @@ export default function DiagnosisTable({ data }) {
               <th scope="col" className="px-1 py-1 text-right text-primary-700 font-semibold" style={{ fontSize: '0.7rem', width: '5rem' }}>권장금액</th>
               <th scope="col" className="px-1 py-1 text-right text-primary-700 font-semibold" style={{ fontSize: '0.7rem', width: '5rem' }}>가입금액</th>
               <th scope="col" className="px-1 py-1 text-right text-primary-700 font-semibold" style={{ fontSize: '0.7rem', width: '5rem' }}>부족금액</th>
-              <th scope="col" className="px-1 py-1 text-center text-primary-700 font-semibold" style={{ fontSize: '0.7rem', width: '3.5rem' }}>상태</th>
+              <th scope="col" className="px-1 py-1 text-center text-primary-700 font-semibold" style={{ fontSize: '0.7rem', width: '4.5rem' }}>상태</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -315,11 +315,11 @@ export default function DiagnosisTable({ data }) {
                       </td>
                       <td className="px-1 py-0.5 text-center">
                         <span className={classNames(
-                          'inline-flex items-center justify-center rounded-full px-2 py-0.5 font-semibold',
+                          'inline-flex items-center justify-center rounded-full px-2.5 py-0.5 font-semibold whitespace-nowrap',
                           statusStyle.screen,
                           statusStyle.print
                         )}
-                        style={{ fontSize: '0.65rem' }}
+                        style={{ fontSize: '0.65rem', minWidth: '3.5rem' }}
                         >
                           {row.상태}
                         </span>
@@ -366,11 +366,11 @@ export default function DiagnosisTable({ data }) {
                         </td>
                         <td className="px-1 py-0.5 text-center">
                           <span className={classNames(
-                            'inline-flex items-center justify-center rounded-full px-2 py-0.5 font-semibold',
+                            'inline-flex items-center justify-center rounded-full px-2.5 py-0.5 font-semibold whitespace-nowrap',
                             statusStyle.screen,
                             statusStyle.print
                           )}
-                          style={{ fontSize: '0.65rem' }}
+                          style={{ fontSize: '0.65rem', minWidth: '3.5rem' }}
                           >
                             {row.상태}
                           </span>
