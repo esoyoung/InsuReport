@@ -20,10 +20,12 @@ export async function validateWithCloudflareAI(pdfBase64, parsedData, env) {
   const prompt = buildPrompt(parsedData);
 
   // Model list to try in order
-  // DeepSeek R1: Reasoning-first model, excellent for complex logic and Korean
+  // GPT-OSS 120B: Open-weight powerhouse for enterprise-scale chat
   const models = [
-    { name: 'DeepSeek R1 Distill Qwen 32B', id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b' },   // Primary: Reasoning model
-    { name: 'Llama 3.1 70B', id: '@cf/meta/llama-3.1-70b-instruct' },                               // Fallback: Larger model
+    { name: 'GPT-OSS 120B', id: '@cf/gpt-oss/gpt-oss-120b' },                                        // Primary
+    { name: 'GPT-OSS Alt', id: 'gpt-oss-120b' },                                                     // Alternative ID
+    { name: 'DeepSeek R1 Distill Qwen 32B', id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b' },   // Fallback 1
+    { name: 'Llama 3.1 70B', id: '@cf/meta/llama-3.1-70b-instruct' },                               // Fallback 2
   ];
 
   for (const model of models) {
@@ -298,7 +300,13 @@ function buildPrompt(parsedData) {
   return `
 KB 보험 보장분석 리포트 검증 시스템. 원본 PDF에서 4개 섹션 추출 및 검증.
 
-**입력 데이터:**
+**⚠️ 중요 지침:**
+1. 아래 "참고 데이터"는 규칙 기반 파싱 결과로, **오류가 있을 수 있습니다**
+2. **반드시 원본 PDF를 직접 읽고** 데이터를 추출하세요
+3. PDF 내용과 참고 데이터가 다르면 **PDF 내용이 항상 우선**입니다
+4. 참고 데이터는 구조 파악용으로만 사용하세요
+
+**참고 데이터 (검증 필요):**
 계약리스트: ${JSON.stringify(parsedData.계약리스트 || [])}
 진단현황: ${JSON.stringify(parsedData.진단현황 || [])}
 
@@ -340,8 +348,9 @@ D. 상품별담보
 \`\`\`
 
 **주의사항:**
-- 원본 PDF 우선
-- 불확실하면 파싱 결과 유지
+- **원본 PDF가 최우선**: PDF에서 직접 읽은 내용을 사용
+- 보험사명 정확히 확인: "새마을금고중앙회", "KB손해보험", "메리츠화재" 등 PDF에 표기된 그대로
+- 불확실한 경우: 빈 칸으로 두거나 null 사용 (추측 금지)
 - 모든 계약/담보 포함
 - 총보험료: 진행중 계약만
 - 활성월보험료: 진행중 계약만

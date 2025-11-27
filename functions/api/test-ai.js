@@ -17,7 +17,9 @@ export async function onRequestGet(context) {
   // Test 1: Cloudflare AI Models
   if (env.AI) {
     const models = [
-      { name: 'DeepSeek R1 Distill Qwen 32B', id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b' },
+      { name: 'GPT-OSS 120B', id: '@cf/gpt-oss/gpt-oss-120b' },
+      { name: 'GPT-OSS Alt', id: 'gpt-oss-120b' },
+      { name: 'DeepSeek R1', id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b' },
       { name: 'Llama 3.1 70B', id: '@cf/meta/llama-3.1-70b-instruct' }
     ];
 
