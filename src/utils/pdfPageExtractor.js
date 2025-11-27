@@ -91,29 +91,27 @@ export function identifyEssentialPages(pages) {
     essentialPages.add(1); // 표지가 감지 안되면 1페이지 강제 추가
   }
   
-  // 2. 계약 리스트 (5p 등) - 실제 범위 확인
+  // 2. 계약 리스트 (5p 등) - 키워드가 있는 연속된 페이지만
   const contractStartIndex = pages.findIndex(p => p.type === 'CONTRACT_LIST');
   let contractPages = 0;
   
   if (contractStartIndex !== -1) {
     const contractStartPage = pages[contractStartIndex].pageNum;
     
-    // 다음 섹션 찾기
-    let contractEndPage = contractStartPage;
+    // 계약 리스트 키워드가 있는 연속된 페이지 수 확인
+    // (상품별 상세 페이지는 키워드가 없으므로 제외됨)
+    let contractEndIndex = contractStartIndex;
     for (let i = contractStartIndex + 1; i < pages.length; i++) {
-      const pageType = pages[i].type;
-      if (pageType === 'TERMINATED_LIST' || pageType === 'DIAGNOSIS') {
-        contractEndPage = pages[i].pageNum - 1;
-        break;
-      }
-      if (i === pages.length - 1) {
-        contractEndPage = pages[i].pageNum;
+      // 연속해서 CONTRACT_LIST 타입이면 포함
+      if (pages[i].type === 'CONTRACT_LIST') {
+        contractEndIndex = i;
+      } else {
+        break; // 다른 타입 나오면 중단
       }
     }
     
-    // 실제 계약 리스트 범위 계산
-    const actualContractPages = contractEndPage - contractStartPage + 1;
-    contractPages = Math.min(actualContractPages, 2); // 최대 2페이지
+    // 실제 계약 리스트 테이블 페이지 수
+    contractPages = Math.min(contractEndIndex - contractStartIndex + 1, 2);
     
     // 페이지 추가
     for (let p = contractStartPage; p < contractStartPage + contractPages; p++) {
@@ -123,29 +121,26 @@ export function identifyEssentialPages(pages) {
     console.log(`  📋 계약 리스트: Page ${contractStartPage}${contractPages > 1 ? `-${contractStartPage + contractPages - 1}` : ''} (${contractPages}페이지)`);
   }
   
-  // 3. 실효/해지 계약 (있으면 포함)
+  // 3. 실효/해지 계약 (있으면 포함) - 키워드가 있는 연속된 페이지만
   const terminatedStartIndex = pages.findIndex(p => p.type === 'TERMINATED_LIST');
   let terminatedPages = 0;
   
   if (terminatedStartIndex !== -1) {
     const terminatedStartPage = pages[terminatedStartIndex].pageNum;
     
-    // 다음 섹션(진단현황) 찾기
-    let terminatedEndPage = terminatedStartPage;
+    // 실효/해지 키워드가 있는 연속된 페이지 수 확인
+    let terminatedEndIndex = terminatedStartIndex;
     for (let i = terminatedStartIndex + 1; i < pages.length; i++) {
-      const pageType = pages[i].type;
-      if (pageType === 'DIAGNOSIS') {
-        terminatedEndPage = pages[i].pageNum - 1;
+      // 연속해서 TERMINATED_LIST 타입이면 포함
+      if (pages[i].type === 'TERMINATED_LIST') {
+        terminatedEndIndex = i;
+      } else {
         break;
-      }
-      if (i === pages.length - 1) {
-        terminatedEndPage = pages[i].pageNum;
       }
     }
     
-    // 실제 실효/해지 범위 계산
-    const actualTerminatedPages = terminatedEndPage - terminatedStartPage + 1;
-    terminatedPages = Math.min(actualTerminatedPages, 2); // 최대 2페이지
+    // 실제 실효/해지 테이블 페이지 수
+    terminatedPages = Math.min(terminatedEndIndex - terminatedStartIndex + 1, 2);
     
     // 페이지 추가
     for (let p = terminatedStartPage; p < terminatedStartPage + terminatedPages; p++) {
