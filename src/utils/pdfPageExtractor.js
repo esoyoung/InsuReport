@@ -11,8 +11,8 @@ import { PDFDocument } from 'pdf-lib';
 const PAGE_KEYWORDS = {
   COVER: /^[\s\S]*?보장분석|보험설계|표지/i, // 표지 (1p)
   CONTRACT_LIST: /님의\s*(?:전체|보유)\s*계약\s*리스트/i, // 계약 리스트 (5p 등)
-  TERMINATED_LIST: /님의\s*(?:실효|해지)\s*계약\s*현황/i, // 실효/해지 (11p 등, 없을 수 있음)
-  DIAGNOSIS: /님의\s*전체\s*담보\s*진단\s*현황/i // 진단 현황 (12p, 18p 등)
+  TERMINATED_LIST: /(?:실효|해지)\s*계약\s*현황|님의\s*실효|님의\s*해지/i, // 실효/해지 (11p 등, 없을 수 있음)
+  DIAGNOSIS: /전체\s*담보\s*진단\s*현황|님의\s*진단\s*현황/i // 진단 현황 (12p, 18p 등)
 };
 
 /**
