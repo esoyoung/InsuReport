@@ -4,6 +4,7 @@ import { parsePDF } from '../utils/pdfParser';
 import { validateContractsWithAI, isAIValidationAvailable } from '../utils/aiValidator';
 import { compressPDF, isPDFTooLarge, formatFileSize } from '../utils/pdfCompressor';
 import { uploadToR2, validateContractsWithR2, shouldUseR2 } from '../utils/storageUploader';
+import { extractAndOptimizePDF, splitPDFIfNeeded } from '../utils/pdfPageExtractor';
 
 function FileUploader() {
   const { setLoading, setError, setParsedData, isLoading, error } = useInsuranceStore();
@@ -26,47 +27,74 @@ function FileUploader() {
     setValidationStatus(null);
 
     try {
-      // 0단계: PDF 크기 확인 및 R2 경로 결정
-      const fileSizeMB = file.size / (1024 * 1024);
-      const useR2 = shouldUseR2(file, 2.8); // 2.8MB 초과 시 R2 사용
+      // 0단계: PDF 크기 확인
+      const originalSizeMB = file.size / (1024 * 1024);
+      console.log(`📄 원본 PDF: ${originalSizeMB.toFixed(2)}MB`);
+      
       // Paid Plan ($5/month): 10MB까지 AI 검증 가능 (30초 CPU time)
-      const skipAIForLarge = fileSizeMB > 10; // 10MB 초과 시 AI 검증 스킵
+      const skipAIForLarge = originalSizeMB > 10; // 10MB 초과 시 AI 검증 스킵
+      
+      // 1단계: 규칙 기반 파싱 (먼저 수행하여 페이지 구조 파악)
+      console.log('📄 규칙 기반 PDF 파싱 시작...');
+      setValidationStatus('PDF 분석 중...');
+      const data = await parsePDF(file);
+      console.log('✅ 규칙 기반 파싱 완료');
+      
+      // 2단계: 필수 페이지만 추출하여 경량화 (6.93MB → 1.5-2MB)
+      console.log('✂️ 필수 페이지 추출 시작 (AI 검증용)...');
+      setValidationStatus('필수 페이지 추출 중...');
+      
+      let optimizedFile = file;
+      let extractionStats = null;
+      
+      try {
+        const { extractedFile, stats } = await extractAndOptimizePDF(file);
+        optimizedFile = extractedFile;
+        extractionStats = stats;
+        
+        console.log(`✅ PDF 최적화 완료: ${stats.originalPages}p → ${stats.extractedPages}p, ${stats.reductionPercent}% 감소`);
+        setValidationStatus(
+          `최적화 완료: ${stats.extractedPages}페이지 (${(extractedFile.size / 1024 / 1024).toFixed(1)}MB)`
+        );
+      } catch (extractError) {
+        console.warn('⚠️ 페이지 추출 실패, 원본 사용:', extractError.message);
+        setValidationStatus('페이지 추출 실패, 원본 PDF 사용');
+      }
+      
+      // 3단계: 최적화된 PDF 크기 확인
+      const optimizedSizeMB = optimizedFile.size / (1024 * 1024);
+      const useR2 = shouldUseR2(optimizedFile, 2.8); // 2.8MB 초과 시 R2 사용
 
       if (useR2) {
-        console.log(`📦 대용량 PDF 감지 (${fileSizeMB.toFixed(2)}MB > 2.8MB), R2 경로 사용`);
+        console.log(`📦 최적화 후에도 대용량 (${optimizedSizeMB.toFixed(2)}MB > 2.8MB), R2 경로 사용`);
         
         if (skipAIForLarge) {
-          console.log(`⚠️ 초대용량 PDF (${fileSizeMB.toFixed(2)}MB > 10MB), AI 검증 스킵 (할당량 절약)`);
+          console.log(`⚠️ 초대용량 PDF (${originalSizeMB.toFixed(2)}MB > 10MB), AI 검증 스킵`);
         }
         
         try {
-          // 1단계: R2에 업로드
-          setValidationStatus(`R2 업로드 중... (${formatFileSize(file.size)})`);
-          const { fileKey } = await uploadToR2(file);
-          
-          // 2단계: 규칙 기반 파싱 (로컬에서)
-          console.log('📄 규칙 기반 PDF 파싱 시작...');
-          setValidationStatus('PDF 분석 중...');
-          const data = await parsePDF(file);
-          console.log('✅ 규칙 기반 파싱 완료');
+          // 4단계: R2에 업로드
+          setValidationStatus(`R2 업로드 중... (${formatFileSize(optimizedFile.size)})`);
+          const { fileKey } = await uploadToR2(optimizedFile);
 
-          // 3단계: R2 기반 AI 검증 (10MB 이하만)
+          // 5단계: R2 기반 AI 검증 (10MB 이하만)
           if (isAIValidationAvailable() && !skipAIForLarge) {
-            // 5MB 이상 PDF는 병렬 처리 모드로 속도 2-3배 향상
-            const useParallel = fileSizeMB >= 5;
+            // 최적화된 PDF는 보통 2MB 이하이므로 병렬 처리 불필요
+            // 하지만 페이지가 많아서 2MB를 초과하면 병렬 사용
+            const useParallel = optimizedSizeMB >= 2;
             
             if (useParallel) {
-              console.log('🚀 병렬 AI 검증 시작 (2-3배 빠름)...');
-              setValidationStatus('AI 병렬 검증 중 (고속 처리)...');
+              console.log('🚀 병렬 AI 검증 시작 (2MB 초과)...');
+              setValidationStatus('AI 병렬 검증 중...');
             } else {
-              console.log('🤖 R2 기반 AI 검증 시작...');
-              setValidationStatus('AI 검증 중 (대용량 PDF)...');
+              console.log('🤖 최적화된 PDF로 AI 검증 시작...');
+              setValidationStatus('AI 검증 중 (경량 PDF)...');
             }
             
             try {
               const validationResult = await validateContractsWithR2(fileKey, data, {
                 parallel: useParallel,
-                fileSizeMB
+                fileSizeMB: optimizedSizeMB
               });
               
               const mode = validationResult.metadata?.mode || 'single';
@@ -117,37 +145,17 @@ function FileUploader() {
         }
       }
 
-      // 일반 경로: 압축 + 직접 업로드
-      // 0단계: PDF 압축 (필요한 경우)
-      if (isPDFTooLarge(file, 2.5)) {
-        console.log('📦 PDF 크기가 큽니다. 압축 시도...');
-        setValidationStatus(`PDF 압축 중... (${formatFileSize(file.size)})`);
-        
-        const compressionResult = await compressPDF(file, 2.0);
-        
-        if (compressionResult.compressed) {
-          console.log(`✅ 압축 완료: ${formatFileSize(compressionResult.originalSize)} → ${formatFileSize(compressionResult.compressedSize)}`);
-          file = compressionResult.file;
-          setValidationStatus(
-            `압축 완료 (${compressionResult.compressionRatio}% 감소)`
-          );
-        } else if (compressionResult.error) {
-          console.warn('⚠️ 압축 실패, 원본 파일 사용:', compressionResult.error);
-        }
-      }
+      // 일반 경로 (R2 미사용): 최적화된 PDF 사용
+      // 최적화된 PDF가 이미 있으므로 압축 불필요
+      console.log(`💡 최적화된 PDF 사용: ${optimizedSizeMB.toFixed(2)}MB`);
+      setValidationStatus(`경량 PDF로 AI 검증 준비 (${optimizedSizeMB.toFixed(1)}MB)`);
 
-      // 1단계: 규칙 기반 파싱
-      console.log('📄 규칙 기반 PDF 파싱 시작...');
-      setValidationStatus('PDF 분석 중...');
-      const data = await parsePDF(file);
-      console.log('✅ 규칙 기반 파싱 완료');
-
-      // 2단계: AI 검증 (활성화된 경우)
+      // 6단계: AI 검증 (활성화된 경우, 최적화된 PDF 사용)
       if (isAIValidationAvailable()) {
-        console.log('🤖 AI 검증 시작...');
-        setValidationStatus('AI 검증 중...');
+        console.log('🤖 최적화된 PDF로 AI 검증 시작...');
+        setValidationStatus('AI 검증 중 (경량 PDF)...');
         
-        const validationResult = await validateContractsWithAI(file, data);
+        const validationResult = await validateContractsWithAI(optimizedFile, data);
         
         if (validationResult.validated) {
           console.log('✅ AI 검증 완료');
