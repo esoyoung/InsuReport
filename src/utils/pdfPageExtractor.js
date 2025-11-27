@@ -112,8 +112,8 @@ export function identifyEssentialPages(pages) {
       }
     }
     
-    // 실제 계약 리스트 테이블 페이지 수
-    contractPages = Math.min(contractEndIndex - contractStartIndex + 1, 2);
+    // 실제 계약 리스트 테이블 페이지 수 (최대 10페이지까지 허용)
+    contractPages = Math.min(contractEndIndex - contractStartIndex + 1, 10);
     
     // 페이지 추가
     for (let p = contractStartPage; p < contractStartPage + contractPages; p++) {
@@ -141,8 +141,8 @@ export function identifyEssentialPages(pages) {
       }
     }
     
-    // 실제 실효/해지 테이블 페이지 수
-    terminatedPages = Math.min(terminatedEndIndex - terminatedStartIndex + 1, 2);
+    // 실제 실효/해지 테이블 페이지 수 (최대 5페이지까지 허용)
+    terminatedPages = Math.min(terminatedEndIndex - terminatedStartIndex + 1, 5);
     
     // 페이지 추가
     for (let p = terminatedStartPage; p < terminatedStartPage + terminatedPages; p++) {

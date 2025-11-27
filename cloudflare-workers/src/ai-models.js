@@ -256,6 +256,10 @@ D. 상품별담보
 - 보험사명 정확히 확인: "새마을금고중앙회", "KB손해보험", "메리츠화재" 등 PDF에 표기된 그대로
 - 불확실한 경우: 빈 칸으로 두거나 null 사용 (추측 금지)
 - 모든 계약/담보 포함
+- **🚨 JSON 형식 엄수**: 
+  - 배열 마지막 항목 뒤에 콤마(,) 붙이지 마세요
+  - 객체 마지막 속성 뒤에 콤마(,) 붙이지 마세요
+  - 올바른 JSON 형식으로만 응답하세요
 `;
 }
 
@@ -273,8 +277,18 @@ function parseAIResponse(text) {
     // Try to extract JSON from markdown code block
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const jsonText = jsonMatch[1] || jsonMatch[0];
-      return JSON.parse(jsonText);
+      let jsonText = jsonMatch[1] || jsonMatch[0];
+      
+      // Remove trailing comma before closing brackets (common Claude error)
+      jsonText = jsonText.replace(/,(\s*[}\]])/g, '$1');
+      
+      try {
+        return JSON.parse(jsonText);
+      } catch (secondError) {
+        console.error('JSON parsing failed even after cleanup:', secondError.message);
+        console.error('Position:', secondError.message.match(/position (\d+)/)?.[1]);
+        throw new Error(`Failed to parse AI response as JSON: ${secondError.message}`);
+      }
     }
     throw new Error('Failed to parse AI response as JSON');
   }
