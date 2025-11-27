@@ -1,9 +1,10 @@
 // Cloudflare Pages Function for AI Validation (R2-based)
 import {
-  validateWithEnsemble,
+  validateWithCloudflareAI,
   validateWithGemini,
   validateWithGPT4o,
-  validateWithClaude
+  validateWithClaude,
+  validateWithEnsemble
 } from '../../cloudflare-workers/src/ai-models.js';
 
 import { validateWithParallelGemini } from '../../cloudflare-workers/src/parallelAIValidator.js';
@@ -100,18 +101,55 @@ export async function onRequestPost(context) {
 }
 
 async function callAI(pdfBase64, parsedData, model, env) {
-  switch (model) {
-    case 'gemini':
-      return await validateWithGemini(pdfBase64, parsedData, env);
-    case 'gpt-4o':
-      return await validateWithGPT4o(pdfBase64, parsedData, env);
-    case 'claude':
-      return await validateWithClaude(pdfBase64, parsedData, env);
-    case 'auto':
-    case 'ensemble':
-    default:
-      return await validateWithEnsemble(pdfBase64, parsedData, env);
-  }
+  // ============================================================================
+  // 🎯 SINGLE MODEL STRATEGY - ONE ACTIVE MODEL AT A TIME
+  // ============================================================================
+  // ✅ Active Model: Claude 3.5 Sonnet (uncomment to use)
+  // 💰 Cost: ~$30/1000 calls (4-page PDF)
+  // 📝 Status: ANTHROPIC_API_KEY configured ✓
+  // 🎯 Best for: PDF parsing accuracy, Korean insurance documents
+  // ============================================================================
+  console.log('🤖 Using Claude 3.5 Sonnet as primary model');
+  return await validateWithClaude(pdfBase64, parsedData, env);
+
+  // ============================================================================
+  // 🔄 AVAILABLE ALTERNATIVES (Uncomment ONE to switch)
+  // ============================================================================
+  
+  // Option 1: GPT-4o (High Accuracy, PDF Vision)
+  // 💰 Cost: ~$10/1000 calls (4-page PDF)
+  // 📝 Requires: OPENAI_API_KEY environment variable
+  // 🎯 Best for: Accurate PDF parsing, balanced cost/performance
+  // ----------------------------------------------------------------------------
+  // console.log('🤖 Using GPT-4o as primary model');
+  // return await validateWithGPT4o(pdfBase64, parsedData, env);
+
+  // Option 2: Gemini (Fast & Cheap, PDF Vision)
+  // 💰 Cost: ~$0.075/1000 calls (4-page PDF)
+  // 📝 Requires: GEMINI_API_KEY environment variable
+  // 🎯 Best for: Cost efficiency, fast processing
+  // ⚠️ Note: Previously worked well, annual billing concern
+  // ----------------------------------------------------------------------------
+  // console.log('🤖 Using Gemini as primary model');
+  // return await validateWithGemini(pdfBase64, parsedData, env);
+
+  // Option 3: Cloudflare AI (Edge Computing, Text-only)
+  // 💰 Cost: $5/month + usage
+  // 📝 Requires: AI binding (already configured)
+  // 🎯 Best for: Low latency, cost control
+  // ⚠️ Warning: TEXT-ONLY (cannot read PDF directly, uses parsed data)
+  // Models: DeepSeek R1 Distill Qwen 32B → Llama 3.1 70B (cascade)
+  // ----------------------------------------------------------------------------
+  // console.log('🤖 Using Cloudflare AI (text-only fallback)');
+  // return await validateWithCloudflareAI(pdfBase64, parsedData, env);
+
+  // ============================================================================
+  // 🚫 DEPRECATED: Ensemble mode (multi-model cascade)
+  // ============================================================================
+  // ⚠️ Ensemble mode is disabled for clarity and cost control
+  // Uncomment below to re-enable multi-model cascade (not recommended)
+  // ----------------------------------------------------------------------------
+  // return await validateWithEnsemble(pdfBase64, parsedData, env);
 }
 
 function arrayBufferToBase64(buffer) {

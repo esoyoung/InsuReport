@@ -1,11 +1,49 @@
 /**
- * Multi-Model AI Service
+ * ============================================================================
+ * 🎯 SINGLE MODEL AI SERVICE - KB Insurance PDF Validator
+ * ============================================================================
  * 
- * Supported models:
- * - Cloudflare Workers AI (Llama 3.2 Vision) - Edge AI, No API key needed
- * - Gemini 2.0 Flash (Google) - Fast & Cheap
- * - GPT-4o (OpenAI) - High Accuracy
- * - Claude 3.5 Sonnet (Anthropic) - Balanced
+ * Strategy: ONE active model at a time for clarity and cost control
+ * Switch models by commenting/uncommenting in validate-contracts-r2.js
+ * 
+ * ============================================================================
+ * 📊 AVAILABLE MODELS (status as of 2025-11-27)
+ * ============================================================================
+ * 
+ * ✅ Claude 3.5 Sonnet (Anthropic) - ACTIVE
+ *    - Cost: ~$30/1000 calls (4-page PDF)
+ *    - API Key: ANTHROPIC_API_KEY ✓ configured
+ *    - PDF Vision: ✓ Direct PDF processing
+ *    - Korean: ✓ Excellent support
+ *    - Status: Working, ready to use
+ *    - Best for: Accurate PDF parsing
+ * 
+ * 🔄 GPT-4o (OpenAI) - AVAILABLE
+ *    - Cost: ~$10/1000 calls (4-page PDF)
+ *    - API Key: OPENAI_API_KEY (not configured)
+ *    - PDF Vision: ✓ Direct PDF processing
+ *    - Korean: ✓ Excellent support
+ *    - Status: Ready when API key added
+ *    - Best for: Balanced cost/accuracy
+ * 
+ * 🔄 Gemini (Google) - AVAILABLE
+ *    - Cost: ~$0.075/1000 calls (4-page PDF)
+ *    - API Key: GEMINI_API_KEY ✓ configured (but not in use)
+ *    - PDF Vision: ✓ Direct PDF processing
+ *    - Korean: ✓ Good support
+ *    - Status: Previously worked well, paused due to annual billing concern
+ *    - Best for: Cost efficiency
+ * 
+ * ⚠️ Cloudflare Workers AI - TEXT-ONLY (Limited use)
+ *    - Cost: $5/month + usage
+ *    - API Key: None needed (AI binding)
+ *    - PDF Vision: ✗ TEXT-ONLY (cannot read PDF, uses parsed data only)
+ *    - Korean: ✓ Good (DeepSeek R1, Llama 3.1)
+ *    - Status: Working but inaccurate (copies parsed data)
+ *    - Models: DeepSeek R1 Distill Qwen 32B → Llama 3.1 70B (cascade)
+ *    - Best for: Fallback when PDF vision not needed
+ * 
+ * ============================================================================
  */
 
 /**
