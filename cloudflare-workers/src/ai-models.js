@@ -157,6 +157,7 @@ KB 보험 보장분석 리포트 검증 시스템. 원본 PDF에서 4개 섹션 
 
 A. 보유 계약 리스트
 - 5페이지 "보유 계약 리스트" 표에서 추출
+- ⚠️ **계약이 많을 경우 (10개 이상)**: 처음 10개만 추출하세요 (진단 검증이 주 목적)
 - 각 계약마다:
   - 보험사명, 상품명 정확 추출 (보험사: "메리츠화재", 상품명: "(무)상품명")
   - 납입상태: "납입완료"/"완납" → "완료", 그 외 → "진행중"
@@ -279,14 +280,46 @@ function parseAIResponse(text) {
     if (jsonMatch) {
       let jsonText = jsonMatch[1] || jsonMatch[0];
       
-      // Remove trailing comma before closing brackets (common Claude error)
+      // 🔧 Enhanced JSON cleanup for Claude's large responses
+      // 1. Remove trailing commas before closing brackets
       jsonText = jsonText.replace(/,(\s*[}\]])/g, '$1');
+      
+      // 2. Remove multiple consecutive commas
+      jsonText = jsonText.replace(/,{2,}/g, ',');
+      
+      // 3. Remove comments (Claude sometimes adds these)
+      jsonText = jsonText.replace(/\/\/[^\n]*\n/g, '');
+      jsonText = jsonText.replace(/\/\*[\s\S]*?\*\//g, '');
+      
+      // 4. Fix incomplete JSON arrays - if last char is comma, close the array/object
+      jsonText = jsonText.trim();
+      if (jsonText.endsWith(',')) {
+        // Count unclosed brackets
+        const openBrackets = (jsonText.match(/\[/g) || []).length;
+        const closeBrackets = (jsonText.match(/\]/g) || []).length;
+        const openBraces = (jsonText.match(/\{/g) || []).length;
+        const closeBraces = (jsonText.match(/\}/g) || []).length;
+        
+        // Remove trailing comma
+        jsonText = jsonText.slice(0, -1);
+        
+        // Add missing closing brackets
+        jsonText += ']'.repeat(openBrackets - closeBrackets);
+        jsonText += '}'.repeat(openBraces - closeBraces);
+      }
       
       try {
         return JSON.parse(jsonText);
       } catch (secondError) {
         console.error('JSON parsing failed even after cleanup:', secondError.message);
         console.error('Position:', secondError.message.match(/position (\d+)/)?.[1]);
+        
+        // Final attempt: find the error position and try to fix it
+        const errorPos = parseInt(secondError.message.match(/position (\d+)/)?.[1] || '0');
+        if (errorPos > 0) {
+          console.error('Problematic JSON segment:', jsonText.substring(Math.max(0, errorPos - 100), Math.min(jsonText.length, errorPos + 100)));
+        }
+        
         throw new Error(`Failed to parse AI response as JSON: ${secondError.message}`);
       }
     }
