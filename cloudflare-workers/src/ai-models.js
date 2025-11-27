@@ -20,7 +20,8 @@ export async function validateWithCloudflareAI(pdfBase64, parsedData, env) {
 
   try {
     // Cloudflare Workers AI uses the AI binding
-    const response = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+    // Using Qwen2-VL for vision tasks (no license agreement needed)
+    const response = await env.AI.run('@cf/qwen/qwen2-vl-7b-instruct', {
       messages: [
         {
           role: 'user',
@@ -202,44 +203,19 @@ export async function validateWithClaude(pdfBase64, parsedData, env) {
  * Ensemble: Primary-Fallback strategy
  */
 export async function validateWithEnsemble(pdfBase64, parsedData, env) {
-  console.log('🔀 Starting ensemble validation (Cloudflare AI → Gemini → GPT-4o → Claude)');
+  console.log('🔀 Starting ensemble validation (Gemini → GPT-4o → Claude)');
 
-  // 1st: Try Cloudflare Workers AI (Edge AI, no API key needed)
-  if (env.AI) {
-    try {
-      console.log('🔄 Trying Cloudflare AI...');
-      const cfAIResult = await validateWithCloudflareAI(pdfBase64, parsedData, env);
-      const confidence = calculateConfidence(cfAIResult);
-      
-      console.log(`✅ Cloudflare AI result - Confidence: ${(confidence * 100).toFixed(1)}%`);
-      
-      if (confidence > 0.85) {
-        return { 
-          model: 'cloudflare-ai', 
-          confidence,
-          ...cfAIResult 
-        };
-      }
-      
-      console.log(`⚠️ Cloudflare AI confidence low (${(confidence * 100).toFixed(1)}%), trying Gemini...`);
-    } catch (error) {
-      console.error('❌ Cloudflare AI failed:', error.message);
-      console.error('❌ Cloudflare AI error details:', error.stack);
-    }
-  } else {
-    console.log('⚠️ Cloudflare AI binding not configured, skipping');
-  }
-
-  // 2nd: Try Gemini (Fast & Cheap)
+  // 1st: Try Gemini (Fast & Cheap)
   if (env.GEMINI_API_KEY) {
     try {
-      console.log('🔄 Trying Gemini...');
+      console.log('🔄 Trying Gemini API...');
       const geminiResult = await validateWithGemini(pdfBase64, parsedData, env);
       const confidence = calculateConfidence(geminiResult);
       
       console.log(`✅ Gemini result - Confidence: ${(confidence * 100).toFixed(1)}%`);
       
-      if (confidence > 0.85) {
+      // Gemini가 성공하면 바로 반환 (confidence 체크 완화)
+      if (confidence > 0.7) {
         return { 
           model: 'gemini', 
           confidence,
@@ -250,7 +226,7 @@ export async function validateWithEnsemble(pdfBase64, parsedData, env) {
       console.log(`⚠️ Gemini confidence low (${(confidence * 100).toFixed(1)}%), trying GPT-4o...`);
     } catch (error) {
       console.error('❌ Gemini failed:', error.message);
-      console.error('❌ Gemini error details:', error.stack);
+      console.error('❌ Gemini full error:', error);
     }
   } else {
     console.log('⚠️ GEMINI_API_KEY not configured, skipping Gemini');
