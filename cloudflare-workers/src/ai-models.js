@@ -19,10 +19,11 @@ export async function validateWithCloudflareAI(pdfBase64, parsedData, env) {
 
   const prompt = buildPrompt(parsedData);
 
-  // Model list to try in order (tested and working)
+  // Model list to try in order
+  // DeepSeek R1: Reasoning-first model, excellent for complex logic and Korean
   const models = [
-    { name: 'Llama 3.1 70B', id: '@cf/meta/llama-3.1-70b-instruct' }, // Large, high quality
-    { name: 'Llama 3.1 8B', id: '@cf/meta/llama-3.1-8b-instruct' }    // Smaller, faster fallback
+    { name: 'DeepSeek R1 Distill Qwen 32B', id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b' },   // Primary: Reasoning model
+    { name: 'Llama 3.1 70B', id: '@cf/meta/llama-3.1-70b-instruct' },                               // Fallback: Larger model
   ];
 
   for (const model of models) {

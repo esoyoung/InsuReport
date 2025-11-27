@@ -35,29 +35,33 @@ function FileUploader() {
       const skipAIForLarge = originalSizeMB > 10; // 10MB 초과 시 AI 검증 스킵
       
       // 1단계: 규칙 기반 파싱 (먼저 수행하여 페이지 구조 파악)
-      console.log('📄 규칙 기반 PDF 파싱 시작...');
+      console.log('📄 [단계 1/5] 규칙 기반 PDF 파싱 시작...');
       setValidationStatus('PDF 분석 중...');
       const data = await parsePDF(file);
-      console.log('✅ 규칙 기반 파싱 완료');
+      console.log('✅ [단계 1/5] 규칙 기반 파싱 완료');
       
       // 2단계: 필수 페이지만 추출하여 경량화 (6.93MB → 1.5-2MB)
-      console.log('✂️ 필수 페이지 추출 시작 (AI 검증용)...');
+      console.log('✂️ [단계 2/5] 필수 페이지 추출 시작 (AI 검증용)...');
       setValidationStatus('필수 페이지 추출 중...');
       
       let optimizedFile = file;
       let extractionStats = null;
       
       try {
+        console.log(`🔍 [단계 2/5] extractAndOptimizePDF 호출...`);
         const { extractedFile, stats } = await extractAndOptimizePDF(file);
         optimizedFile = extractedFile;
         extractionStats = stats;
         
-        console.log(`✅ PDF 최적화 완료: ${stats.originalPages}p → ${stats.extractedPages}p, ${stats.reductionPercent}% 감소`);
+        console.log(`✅ [단계 2/5] PDF 최적화 완료: ${stats.originalPages}p → ${stats.extractedPages}p, ${stats.reductionPercent}% 감소`);
+        console.log(`📦 [단계 2/5] 최적화된 파일 크기: ${(extractedFile.size / 1024 / 1024).toFixed(2)}MB`);
         setValidationStatus(
           `최적화 완료: ${stats.extractedPages}페이지 (${(extractedFile.size / 1024 / 1024).toFixed(1)}MB)`
         );
       } catch (extractError) {
-        console.warn('⚠️ 페이지 추출 실패, 원본 사용:', extractError.message);
+        console.error('❌ [단계 2/5] 페이지 추출 실패:', extractError);
+        console.error('❌ [단계 2/5] Error stack:', extractError.stack);
+        console.warn('⚠️ [단계 2/5] 원본 PDF 사용으로 fallback');
         setValidationStatus('페이지 추출 실패, 원본 PDF 사용');
       }
       
