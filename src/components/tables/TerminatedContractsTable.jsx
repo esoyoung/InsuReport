@@ -105,6 +105,12 @@ export default function TerminatedContractsTable({ data }) {
               <th scope="col" className="px-1 py-2 text-right text-gray-700 font-semibold align-middle" style={{ width: '6rem' }}>
                 월보험료
               </th>
+              <th scope="col" className="px-1 py-2 text-center text-gray-700 font-semibold align-middle" style={{ width: '4.5rem' }}>
+                실효/해지일
+              </th>
+              <th scope="col" className="px-1 py-2 text-left text-gray-700 font-semibold align-middle" style={{ width: '8rem' }}>
+                실효/해지사유
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
@@ -119,6 +125,8 @@ export default function TerminatedContractsTable({ data }) {
               const premium = contract.월보험료 
                 ? `${currencyFormatter.format(sanitizeNumber(contract.월보험료))}원`
                 : '—';
+              const terminatedDate = contract.실효해지일 || contract['실효/해지일'] || '—';
+              const terminatedReason = contract.실효해지사유 || contract['실효/해지사유'] || '—';
 
               return (
                 <tr key={`terminated-${index}`} className="hover:bg-gray-50 align-middle">
@@ -147,6 +155,12 @@ export default function TerminatedContractsTable({ data }) {
                   </td>
                   <td className="px-1 py-2 text-gray-900 align-middle">
                     {renderCellContent(premium, { align: 'right' })}
+                  </td>
+                  <td className="px-1 py-2 text-gray-700 align-middle">
+                    {renderCellContent(terminatedDate, { align: 'center' })}
+                  </td>
+                  <td className="px-1 py-2 text-gray-700 align-middle">
+                    {renderCellContent(terminatedReason, { align: 'left' })}
                   </td>
                 </tr>
               );
