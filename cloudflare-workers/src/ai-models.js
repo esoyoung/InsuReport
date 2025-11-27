@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * 🎯 SINGLE MODEL AI SERVICE - KB Insurance PDF Validator
+ * 🎯 AI SERVICE - KB Insurance PDF Validator
  * ============================================================================
  * 
  * Strategy: ONE active model at a time for clarity and cost control
@@ -26,185 +26,11 @@
  *    - Status: Ready when API key added
  *    - Best for: Balanced cost/accuracy
  * 
- * 🔄 Gemini (Google) - AVAILABLE
- *    - Cost: ~$0.075/1000 calls (4-page PDF)
- *    - API Key: GEMINI_API_KEY ✓ configured (but not in use)
- *    - PDF Vision: ✓ Direct PDF processing
- *    - Korean: ✓ Good support
- *    - Status: Previously worked well, paused due to annual billing concern
- *    - Best for: Cost efficiency
- * 
- * ⚠️ Cloudflare Workers AI - TEXT-ONLY (Limited use)
- *    - Cost: $5/month + usage
- *    - API Key: None needed (AI binding)
- *    - PDF Vision: ✗ TEXT-ONLY (cannot read PDF, uses parsed data only)
- *    - Korean: ✓ Good (DeepSeek R1, Llama 3.1)
- *    - Status: Working but inaccurate (copies parsed data)
- *    - Models: DeepSeek R1 Distill Qwen 32B → Llama 3.1 70B (cascade)
- *    - Best for: Fallback when PDF vision not needed
- * 
  * ============================================================================
  */
 
 /**
- * Cloudflare Workers AI - Try multiple models in order
- * Priority: GPT-OSS 120B → DeepSeek-R1 → Qwen 3 Coder
- */
-export async function validateWithCloudflareAI(pdfBase64, parsedData, env) {
-  if (!env.AI) {
-    throw new Error('Cloudflare AI binding not configured');
-  }
-
-  const prompt = buildPrompt(parsedData);
-
-  // Model list to try in order
-  // GPT-OSS 120B: Open-weight powerhouse for enterprise-scale chat
-  const models = [
-    { name: 'GPT-OSS 120B', id: '@cf/gpt-oss/gpt-oss-120b' },                                        // Primary
-    { name: 'GPT-OSS Alt', id: 'gpt-oss-120b' },                                                     // Alternative ID
-    { name: 'DeepSeek R1 Distill Qwen 32B', id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b' },   // Fallback 1
-    { name: 'Llama 3.1 70B', id: '@cf/meta/llama-3.1-70b-instruct' },                               // Fallback 2
-  ];
-
-  for (const model of models) {
-    try {
-      console.log(`🔄 Trying Cloudflare AI: ${model.name}...`);
-      
-      const response = await env.AI.run(model.id, {
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a PDF data extraction assistant. Extract and validate insurance contract data from Korean KB insurance reports. Return valid JSON only.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.1,
-        max_tokens: 8192
-      });
-
-      console.log(`✅ ${model.name} response received:`, JSON.stringify(response).substring(0, 300));
-
-      // Parse response
-      const result = response.response || response.result || response;
-      const parsedResult = parseAIResponse(typeof result === 'string' ? result : JSON.stringify(result));
-      
-      console.log(`✅ ${model.name} parsing successful`);
-      return parsedResult;
-      
-    } catch (error) {
-      console.error(`❌ ${model.name} failed:`, error.message);
-      // Continue to next model
-    }
-  }
-
-  throw new Error('All Cloudflare AI models failed');
-}
-
-/**
- * Gemini 2.0 Flash
- */
-export async function validateWithGemini(pdfBase64, parsedData, env) {
-  const apiKey = env.GEMINI_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY not configured');
-  }
-
-  const prompt = buildPrompt(parsedData);
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            {
-              inline_data: {
-                mime_type: 'application/pdf',
-                data: pdfBase64,
-              },
-            },
-          ],
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          topP: 0.95,
-          topK: 40,
-          maxOutputTokens: 8192,
-          responseMimeType: 'application/json',
-        },
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Gemini API error: ${response.status}`, errorText);
-    throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
-  }
-
-  const result = await response.json();
-  console.log('Gemini response structure:', JSON.stringify(result).substring(0, 500));
-  return parseAIResponse(result.candidates?.[0]?.content?.parts?.[0]?.text);
-}
-
-/**
- * GPT-4o - High accuracy OCR
- */
-export async function validateWithGPT4o(pdfBase64, parsedData, env) {
-  const apiKey = env.OPENAI_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY not configured');
-  }
-
-  const prompt = buildPrompt(parsedData);
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            { 
-              type: 'image_url', 
-              image_url: { 
-                url: `data:application/pdf;base64,${pdfBase64}` 
-              } 
-            }
-          ]
-        }
-      ],
-      temperature: 0.1,
-      max_tokens: 8192,
-      response_format: { type: 'json_object' }
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
-  }
-
-  const result = await response.json();
-  return parseAIResponse(result.choices?.[0]?.message?.content);
-}
-
-/**
- * Claude 3.5 Sonnet - Balanced
+ * Claude 3.5 Sonnet - Primary Model
  */
 export async function validateWithClaude(pdfBase64, parsedData, env) {
   const apiKey = env.ANTHROPIC_API_KEY;
@@ -255,80 +81,52 @@ export async function validateWithClaude(pdfBase64, parsedData, env) {
 }
 
 /**
- * Ensemble: Primary-Fallback strategy
- * Priority: Cloudflare AI → GPT-4o → Claude
+ * GPT-4o - Alternative Model (High accuracy)
  */
-export async function validateWithEnsemble(pdfBase64, parsedData, env) {
-  console.log('🔀 Starting ensemble validation (Cloudflare AI → GPT-4o → Claude)');
-
-  // 1st: Try Cloudflare Workers AI (No API key, monthly billing)
-  if (env.AI) {
-    try {
-      console.log('🔄 Trying Cloudflare AI...');
-      const cfAIResult = await validateWithCloudflareAI(pdfBase64, parsedData, env);
-      const confidence = calculateConfidence(cfAIResult);
-      
-      console.log(`✅ Cloudflare AI result - Confidence: ${(confidence * 100).toFixed(1)}%`);
-      
-      if (confidence > 0.7) {
-        return { 
-          model: 'cloudflare-ai', 
-          confidence,
-          ...cfAIResult 
-        };
-      }
-      
-      console.log(`⚠️ Cloudflare AI confidence low (${(confidence * 100).toFixed(1)}%), trying GPT-4o...`);
-    } catch (error) {
-      console.error('❌ Cloudflare AI failed:', error.message);
-      console.error('❌ Cloudflare AI error details:', error.stack);
-    }
-  } else {
-    console.log('⚠️ Cloudflare AI binding not configured, skipping');
+export async function validateWithGPT4o(pdfBase64, parsedData, env) {
+  const apiKey = env.OPENAI_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY not configured');
   }
 
-  // 2nd: Try GPT-4o (High Accuracy)
-  if (env.OPENAI_API_KEY) {
-    try {
-      console.log('🔄 Trying GPT-4o...');
-      const gpt4oResult = await validateWithGPT4o(pdfBase64, parsedData, env);
-      console.log('✅ GPT-4o result - High confidence');
-      
-      return { 
-        model: 'gpt-4o', 
-        confidence: 0.95,
-        ...gpt4oResult 
-      };
-    } catch (error) {
-      console.error('❌ GPT-4o failed:', error.message);
-      console.error('❌ GPT-4o error details:', error.stack);
-    }
-  } else {
-    console.log('⚠️ OPENAI_API_KEY not configured, skipping GPT-4o');
+  const prompt = buildPrompt(parsedData);
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { 
+              type: 'image_url', 
+              image_url: { 
+                url: `data:application/pdf;base64,${pdfBase64}` 
+              } 
+            }
+          ]
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 8192,
+      response_format: { type: 'json_object' }
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
   }
 
-  // 4th: Try Claude (Fallback)
-  if (env.ANTHROPIC_API_KEY) {
-    try {
-      console.log('🔄 Trying Claude...');
-      const claudeResult = await validateWithClaude(pdfBase64, parsedData, env);
-      console.log('✅ Claude result - Fallback');
-      
-      return { 
-        model: 'claude', 
-        confidence: 0.90,
-        ...claudeResult 
-      };
-    } catch (error) {
-      console.error('❌ Claude failed:', error.message);
-      console.error('❌ Claude error details:', error.stack);
-    }
-  } else {
-    console.log('⚠️ ANTHROPIC_API_KEY not configured, skipping Claude');
-  }
-
-  console.error('❌ All AI models failed - no API keys configured or all models returned errors');
-  throw new Error('All AI models failed');
+  const result = await response.json();
+  return parseAIResponse(result.choices?.[0]?.message?.content);
 }
 
 /**
@@ -414,41 +212,4 @@ function parseAIResponse(text) {
     }
     throw new Error('Failed to parse AI response as JSON');
   }
-}
-
-/**
- * Calculate confidence score
- */
-function calculateConfidence(result) {
-  let score = 1.0;
-  
-  // 1. Check missing fields
-  if (!result.계약리스트 || result.계약리스트.length === 0) {
-    score -= 0.2;
-  }
-  
-  if (!result.진단현황 || result.진단현황.length === 0) {
-    score -= 0.2;
-  }
-  
-  // 2. Validate premium total
-  const expectedTotal = result.계약리스트
-    ?.filter(c => c.납입상태 === '진행중')
-    ?.reduce((sum, c) => sum + (parseFloat(c.월보험료) || 0), 0) || 0;
-  
-  const actualTotal = parseFloat(result.총보험료) || 0;
-  const totalDiff = Math.abs(expectedTotal - actualTotal);
-  
-  if (totalDiff > 10000) { // 10,000원 이상 차이
-    score -= 0.3;
-  }
-  
-  // 3. Check invalid dates
-  const invalidDates = result.계약리스트?.filter(c => {
-    return !/^\d{4}-\d{2}-\d{2}$/.test(c.계약일);
-  }).length || 0;
-  
-  score -= invalidDates * 0.05;
-  
-  return Math.max(0, score);
 }

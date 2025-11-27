@@ -1,13 +1,8 @@
 // Cloudflare Pages Function for AI Validation (R2-based)
 import {
-  validateWithCloudflareAI,
-  validateWithGemini,
-  validateWithGPT4o,
   validateWithClaude,
-  validateWithEnsemble
+  validateWithGPT4o
 } from '../../cloudflare-workers/src/ai-models.js';
-
-import { validateWithParallelGemini } from '../../cloudflare-workers/src/parallelAIValidator.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -45,31 +40,9 @@ export async function onRequestPost(context) {
 
     console.log(`✅ PDF loaded: ${pdfSizeMB}MB`);
 
-    // 병렬 처리 모드 (5MB 이상 PDF만 적용)
-    if (parallel && pdfSizeMB >= 5) {
-      console.log('🚀 병렬 처리 모드 활성화');
-      
-      const validatedData = await validateWithParallelGemini(pdfArrayBuffer, parsedData, env);
-      
-      const duration = Date.now() - startTime;
-      console.log(`✅ Completed in ${duration}ms (parallel mode)`);
-      
-      return new Response(JSON.stringify({
-        ...validatedData,
-        _metadata: {
-          ...validatedData._metadata,
-          pdfSize: `${pdfSizeMB}MB`
-        }
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // 단일 처리 모드 (기존 방식)
-    console.log('📄 단일 처리 모드');
+    // Single model validation
     const pdfBase64 = arrayBufferToBase64(pdfArrayBuffer);
-    const validatedData = await callAI(pdfBase64, parsedData, model, env);
+    const validatedData = await callAI(pdfBase64, parsedData, env);
 
     const duration = Date.now() - startTime;
     console.log(`✅ Completed in ${duration}ms`);
@@ -100,56 +73,28 @@ export async function onRequestPost(context) {
   }
 }
 
-async function callAI(pdfBase64, parsedData, model, env) {
+async function callAI(pdfBase64, parsedData, env) {
   // ============================================================================
-  // 🎯 SINGLE MODEL STRATEGY - ONE ACTIVE MODEL AT A TIME
+  // 🎯 ACTIVE MODEL
   // ============================================================================
-  // ✅ Active Model: Claude 3.5 Sonnet (uncomment to use)
+  // ✅ Claude 3.5 Sonnet (Primary)
   // 💰 Cost: ~$30/1000 calls (4-page PDF)
-  // 📝 Status: ANTHROPIC_API_KEY configured ✓
-  // 🎯 Best for: PDF parsing accuracy, Korean insurance documents
+  // 📝 API Key: ANTHROPIC_API_KEY ✓
+  // 🎯 Best for: Accurate PDF parsing, Korean documents
   // ============================================================================
-  console.log('🤖 Using Claude 3.5 Sonnet as primary model');
+  console.log('🤖 Using Claude 3.5 Sonnet');
   return await validateWithClaude(pdfBase64, parsedData, env);
 
   // ============================================================================
-  // 🔄 AVAILABLE ALTERNATIVES (Uncomment ONE to switch)
+  // 🔄 ALTERNATIVE (Uncomment to switch)
   // ============================================================================
-  
-  // Option 1: GPT-4o (High Accuracy, PDF Vision)
+  // GPT-4o
   // 💰 Cost: ~$10/1000 calls (4-page PDF)
-  // 📝 Requires: OPENAI_API_KEY environment variable
-  // 🎯 Best for: Accurate PDF parsing, balanced cost/performance
+  // 📝 API Key: OPENAI_API_KEY (not configured)
+  // 🎯 Best for: Balanced cost/accuracy
   // ----------------------------------------------------------------------------
-  // console.log('🤖 Using GPT-4o as primary model');
+  // console.log('🤖 Using GPT-4o');
   // return await validateWithGPT4o(pdfBase64, parsedData, env);
-
-  // Option 2: Gemini (Fast & Cheap, PDF Vision)
-  // 💰 Cost: ~$0.075/1000 calls (4-page PDF)
-  // 📝 Requires: GEMINI_API_KEY environment variable
-  // 🎯 Best for: Cost efficiency, fast processing
-  // ⚠️ Note: Previously worked well, annual billing concern
-  // ----------------------------------------------------------------------------
-  // console.log('🤖 Using Gemini as primary model');
-  // return await validateWithGemini(pdfBase64, parsedData, env);
-
-  // Option 3: Cloudflare AI (Edge Computing, Text-only)
-  // 💰 Cost: $5/month + usage
-  // 📝 Requires: AI binding (already configured)
-  // 🎯 Best for: Low latency, cost control
-  // ⚠️ Warning: TEXT-ONLY (cannot read PDF directly, uses parsed data)
-  // Models: DeepSeek R1 Distill Qwen 32B → Llama 3.1 70B (cascade)
-  // ----------------------------------------------------------------------------
-  // console.log('🤖 Using Cloudflare AI (text-only fallback)');
-  // return await validateWithCloudflareAI(pdfBase64, parsedData, env);
-
-  // ============================================================================
-  // 🚫 DEPRECATED: Ensemble mode (multi-model cascade)
-  // ============================================================================
-  // ⚠️ Ensemble mode is disabled for clarity and cost control
-  // Uncomment below to re-enable multi-model cascade (not recommended)
-  // ----------------------------------------------------------------------------
-  // return await validateWithEnsemble(pdfBase64, parsedData, env);
 }
 
 function arrayBufferToBase64(buffer) {
