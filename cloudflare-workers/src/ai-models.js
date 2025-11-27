@@ -2,13 +2,55 @@
  * Multi-Model AI Service
  * 
  * Supported models:
+ * - Cloudflare Workers AI (Llama 3.2 Vision) - Edge AI, No API key needed
  * - Gemini 2.0 Flash (Google) - Fast & Cheap
  * - GPT-4o (OpenAI) - High Accuracy
  * - Claude 3.5 Sonnet (Anthropic) - Balanced
  */
 
 /**
- * Gemini 2.0 Flash - Current default
+ * Cloudflare Workers AI - Edge AI (No API key needed)
+ */
+export async function validateWithCloudflareAI(pdfBase64, parsedData, env) {
+  if (!env.AI) {
+    throw new Error('Cloudflare AI binding not configured');
+  }
+
+  const prompt = buildPrompt(parsedData);
+
+  try {
+    // Cloudflare Workers AI uses the AI binding
+    const response = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:application/pdf;base64,${pdfBase64}`
+              }
+            }
+          ]
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 8192
+    });
+
+    // Parse response
+    const result = response.response || response.result || response;
+    return parseAIResponse(typeof result === 'string' ? result : JSON.stringify(result));
+    
+  } catch (error) {
+    console.error('Cloudflare AI error:', error);
+    throw new Error(`Cloudflare AI error: ${error.message}`);
+  }
+}
+
+/**
+ * Gemini 2.0 Flash
  */
 export async function validateWithGemini(pdfBase64, parsedData, env) {
   const apiKey = env.GEMINI_API_KEY;
@@ -160,31 +202,61 @@ export async function validateWithClaude(pdfBase64, parsedData, env) {
  * Ensemble: Primary-Fallback strategy
  */
 export async function validateWithEnsemble(pdfBase64, parsedData, env) {
-  console.log('🔀 Starting ensemble validation (Gemini → GPT-4o → Claude)');
+  console.log('🔀 Starting ensemble validation (Cloudflare AI → Gemini → GPT-4o → Claude)');
 
-  // 1st: Try Gemini (Fast & Cheap)
-  try {
-    console.log('🔄 Trying Gemini...');
-    const geminiResult = await validateWithGemini(pdfBase64, parsedData, env);
-    const confidence = calculateConfidence(geminiResult);
-    
-    console.log(`✅ Gemini result - Confidence: ${(confidence * 100).toFixed(1)}%`);
-    
-    if (confidence > 0.85) {
-      return { 
-        model: 'gemini', 
-        confidence,
-        ...geminiResult 
-      };
+  // 1st: Try Cloudflare Workers AI (Edge AI, no API key needed)
+  if (env.AI) {
+    try {
+      console.log('🔄 Trying Cloudflare AI...');
+      const cfAIResult = await validateWithCloudflareAI(pdfBase64, parsedData, env);
+      const confidence = calculateConfidence(cfAIResult);
+      
+      console.log(`✅ Cloudflare AI result - Confidence: ${(confidence * 100).toFixed(1)}%`);
+      
+      if (confidence > 0.85) {
+        return { 
+          model: 'cloudflare-ai', 
+          confidence,
+          ...cfAIResult 
+        };
+      }
+      
+      console.log(`⚠️ Cloudflare AI confidence low (${(confidence * 100).toFixed(1)}%), trying Gemini...`);
+    } catch (error) {
+      console.error('❌ Cloudflare AI failed:', error.message);
+      console.error('❌ Cloudflare AI error details:', error.stack);
     }
-    
-    console.log(`⚠️ Gemini confidence low (${(confidence * 100).toFixed(1)}%), trying GPT-4o...`);
-  } catch (error) {
-    console.error('❌ Gemini failed:', error.message);
-    console.error('❌ Gemini error details:', error.stack);
+  } else {
+    console.log('⚠️ Cloudflare AI binding not configured, skipping');
   }
 
-  // 2nd: Try GPT-4o (High Accuracy)
+  // 2nd: Try Gemini (Fast & Cheap)
+  if (env.GEMINI_API_KEY) {
+    try {
+      console.log('🔄 Trying Gemini...');
+      const geminiResult = await validateWithGemini(pdfBase64, parsedData, env);
+      const confidence = calculateConfidence(geminiResult);
+      
+      console.log(`✅ Gemini result - Confidence: ${(confidence * 100).toFixed(1)}%`);
+      
+      if (confidence > 0.85) {
+        return { 
+          model: 'gemini', 
+          confidence,
+          ...geminiResult 
+        };
+      }
+      
+      console.log(`⚠️ Gemini confidence low (${(confidence * 100).toFixed(1)}%), trying GPT-4o...`);
+    } catch (error) {
+      console.error('❌ Gemini failed:', error.message);
+      console.error('❌ Gemini error details:', error.stack);
+    }
+  } else {
+    console.log('⚠️ GEMINI_API_KEY not configured, skipping Gemini');
+  }
+
+  // 3rd: Try GPT-4o (High Accuracy)
   if (env.OPENAI_API_KEY) {
     try {
       console.log('🔄 Trying GPT-4o...');
@@ -204,7 +276,7 @@ export async function validateWithEnsemble(pdfBase64, parsedData, env) {
     console.log('⚠️ OPENAI_API_KEY not configured, skipping GPT-4o');
   }
 
-  // 3rd: Try Claude (Fallback)
+  // 4th: Try Claude (Fallback)
   if (env.ANTHROPIC_API_KEY) {
     try {
       console.log('🔄 Trying Claude...');
