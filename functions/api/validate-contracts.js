@@ -1,9 +1,7 @@
 // Cloudflare Pages Function for direct PDF AI validation
 import {
-  validateWithEnsemble,
-  validateWithGemini,
-  validateWithGPT4o,
-  validateWithClaude
+  validateWithClaude,
+  validateWithGPT4o
 } from '../../cloudflare-workers/src/ai-models.js';
 
 export async function onRequestPost(context) {
@@ -50,17 +48,24 @@ export async function onRequestPost(context) {
   }
 }
 
-async function callAI(pdfBase64, parsedData, model, env) {
-  switch (model) {
-    case 'gemini':
-      return await validateWithGemini(pdfBase64, parsedData, env);
-    case 'gpt-4o':
-      return await validateWithGPT4o(pdfBase64, parsedData, env);
-    case 'claude':
-      return await validateWithClaude(pdfBase64, parsedData, env);
-    case 'auto':
-    case 'ensemble':
-    default:
-      return await validateWithEnsemble(pdfBase64, parsedData, env);
-  }
+async function callAI(pdfBase64, parsedData, env) {
+  // ============================================================================
+  // 🎯 ACTIVE MODEL
+  // ============================================================================
+  // ✅ Claude 3.5 Sonnet (Primary)
+  // 💰 Cost: ~$30/1000 calls (4-page PDF)
+  // 📝 API Key: ANTHROPIC_API_KEY ✓
+  // ============================================================================
+  console.log('🤖 Using Claude 3.5 Sonnet');
+  return await validateWithClaude(pdfBase64, parsedData, env);
+
+  // ============================================================================
+  // 🔄 ALTERNATIVE (Uncomment to switch)
+  // ============================================================================
+  // GPT-4o
+  // 💰 Cost: ~$10/1000 calls
+  // 📝 API Key: OPENAI_API_KEY (not configured)
+  // ----------------------------------------------------------------------------
+  // console.log('🤖 Using GPT-4o');
+  // return await validateWithGPT4o(pdfBase64, parsedData, env);
 }
