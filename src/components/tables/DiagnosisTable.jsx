@@ -1,5 +1,5 @@
 import React from 'react';
-import { COVERAGE_GROUPS } from './CoverageStatusTable';
+import { COVERAGE_GROUPS, normalizeCoverageName } from './CoverageStatusTable';
 
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -169,7 +169,17 @@ export default function DiagnosisTable({ data }) {
     );
   }
 
-  const enrichedFromData = diagnosisList.map((item) => enrichDiagnosis(item));
+  // AI 추출 데이터의 담보명을 정규화하여 매핑
+  const enrichedFromData = diagnosisList.map((item) => {
+    const originalName = item.담보명 || item.진단명 || '';
+    const normalizedName = normalizeCoverageName(originalName);
+    return enrichDiagnosis({
+      ...item,
+      담보명: normalizedName,
+      원본담보명: originalName
+    });
+  });
+  
   const statusCounts = enrichedFromData.reduce(
     (acc, item) => {
       const key = item.상태 || '미가입';

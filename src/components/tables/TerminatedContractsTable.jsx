@@ -63,9 +63,22 @@ export default function TerminatedContractsTable({ data }) {
     return null; // 데이터 없으면 렌더링하지 않음
   }
 
-  // 실효/해지 계약이 없으면 렌더링하지 않음
+  // 실효/해지 계약이 없으면 안내 메시지 표시
   if (!hasContracts) {
-    return null;
+    return (
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900">실효/해지계약현황</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            현재 실효 또는 해지된 계약 목록입니다.
+          </p>
+        </div>
+        <div className="mt-4 p-8 text-center bg-gray-50 rounded-lg border border-gray-200">
+          <p className="text-gray-600">✅ 실효/해지된 계약이 없습니다.</p>
+          <p className="text-xs text-gray-500 mt-2">모든 계약이 정상적으로 유지되고 있습니다.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
