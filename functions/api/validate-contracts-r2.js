@@ -77,25 +77,25 @@ async function callAI(pdfBase64, parsedData, env) {
   // ============================================================================
   // 🎯 ACTIVE MODEL
   // ============================================================================
-  // ✅ Claude Sonnet 4.5 (Primary)
+  // ✅ GPT-4o (Primary) - TESTING
+  // 💰 Cost: ~$30-40/1000 calls (4-page PDF) - 60% cheaper than Sonnet
+  // 📝 API Key: OPENAI_API_KEY ✓ (User key configured)
+  // 🎯 Best for: Balanced cost/accuracy, excellent PDF Vision
+  // ⚡ Speed: 15-20s (faster than Sonnet)
+  // ============================================================================
+  console.log('🤖 Using GPT-4o');
+  return await validateWithGPT4o(pdfBase64, parsedData, env);
+
+  // ============================================================================
+  // 🔄 ALTERNATIVE (Uncomment to switch back)
+  // ============================================================================
+  // Claude Sonnet 4.5
   // 💰 Cost: ~$100/1000 calls (4-page PDF)
   // 📝 API Key: ANTHROPIC_API_KEY ✓
   // 🎯 Best for: Highest accuracy, stable JSON output
-  // ============================================================================
-  console.log('🤖 Using Claude Sonnet 4.5');
-  return await validateWithClaude(pdfBase64, parsedData, env);
-
-  // ============================================================================
-  // 🔄 ALTERNATIVE (Uncomment to switch)
-  // ============================================================================
-  // GPT-4o
-  // 💰 Cost: ~$30-40/1000 calls (4-page PDF)
-  // 📝 API Key: OPENAI_API_KEY (invalid - needs User Key, not Project Key)
-  // 🎯 Best for: Balanced cost/accuracy, good PDF Vision
-  // ⚠️ Issue: Project API keys not supported, need User API key format
   // ----------------------------------------------------------------------------
-  // console.log('🤖 Using GPT-4o');
-  // return await validateWithGPT4o(pdfBase64, parsedData, env);
+  // console.log('🤖 Using Claude Sonnet 4.5');
+  // return await validateWithClaude(pdfBase64, parsedData, env);
 }
 
 function arrayBufferToBase64(buffer) {
