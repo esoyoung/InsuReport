@@ -213,6 +213,10 @@ export default function DiagnosisTable({ data }) {
 
   const getStatusStyle = (status) => STATUS_STYLES[status] || STATUS_STYLES['미가입'];
 
+  const totalShortfallFormatted = totalShortfall > 0 
+    ? `${currencyFormatter.format(Math.round(totalShortfall))}원`
+    : '0원';
+
   const summaryCards = [
     {
       label: '부족담보',
@@ -229,11 +233,11 @@ export default function DiagnosisTable({ data }) {
       background: 'bg-gray-50',
     },
     {
-      label: '주의담보',
-      value: `${statusCounts['주의'] || 0}건`,
-      tone: 'text-amber-600',
-      border: 'border-amber-200',
-      background: 'bg-amber-50',
+      label: '총 부족금액',
+      value: totalShortfallFormatted,
+      tone: 'text-red-700',
+      border: 'border-red-200',
+      background: 'bg-red-50',
     },
   ];
 
