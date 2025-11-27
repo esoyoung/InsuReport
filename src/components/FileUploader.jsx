@@ -145,44 +145,51 @@ function FileUploader() {
         }
       }
 
-      // 일반 경로 (R2 미사용): 최적화된 PDF 사용
-      // 최적화된 PDF가 이미 있으므로 압축 불필요
-      console.log(`💡 최적화된 PDF 사용: ${optimizedSizeMB.toFixed(2)}MB`);
-      setValidationStatus(`경량 PDF로 AI 검증 준비 (${optimizedSizeMB.toFixed(1)}MB)`);
-
-      // 6단계: AI 검증 (활성화된 경우, 최적화된 PDF 사용)
-      if (isAIValidationAvailable()) {
-        console.log('🤖 최적화된 PDF로 AI 검증 시작...');
-        setValidationStatus('AI 검증 중 (경량 PDF)...');
+      // 일반 경로: 최적화된 PDF도 R2를 사용
+      console.log(`💡 최적화된 PDF를 R2에 업로드: ${optimizedSizeMB.toFixed(2)}MB`);
+      setValidationStatus(`R2 업로드 중... (${formatFileSize(optimizedFile.size)})`);
+      
+      try {
+        const { fileKey } = await uploadToR2(optimizedFile);
         
-        const validationResult = await validateContractsWithAI(optimizedFile, data);
-        
-        if (validationResult.validated) {
-          console.log('✅ AI 검증 완료');
-          setValidationStatus(
-            `AI 검증 완료: ${validationResult.corrections?.length || 0}건 수정`
-          );
+        // 6단계: R2 기반 AI 검증
+        if (isAIValidationAvailable() && !skipAIForLarge) {
+          console.log('🤖 최적화된 PDF로 R2 기반 AI 검증 시작...');
+          setValidationStatus('AI 검증 중 (경량 PDF)...');
           
-          // 수정 사항 로그
-          if (validationResult.corrections?.length > 0) {
-            console.log('📝 AI 수정 사항:', validationResult.corrections);
-          }
-          
-          // AI가 검증한 데이터 사용
-          setParsedData(validationResult.data);
-        } else {
-          // 경고 메시지 처리
-          if (validationResult.warning) {
-            console.warn('⚠️', validationResult.warning);
-            setValidationStatus(validationResult.warning);
-          } else {
-            console.warn('⚠️ AI 검증 실패, 규칙 기반 결과 사용');
+          try {
+            const validationResult = await validateContractsWithR2(fileKey, data, {
+              parallel: false,
+              fileSizeMB: optimizedSizeMB
+            });
+            
+            const processingTime = validationResult.metadata?.processingTime || 0;
+            console.log(`✅ AI 검증 완료 (${processingTime}ms)`);
+            setValidationStatus(
+              `AI 검증 완료: ${validationResult.corrections?.length || 0}건 수정`
+            );
+            
+            if (validationResult.corrections?.length > 0) {
+              console.log('📝 AI 수정 사항:', validationResult.corrections);
+            }
+            
+            setParsedData(validationResult.data);
+          } catch (aiError) {
+            console.error('❌ AI 검증 오류:', aiError);
             setValidationStatus('AI 검증 실패 (규칙 기반 결과 사용)');
+            setParsedData(data);
+          }
+        } else {
+          if (skipAIForLarge) {
+            console.log('💡 10MB 초과 PDF는 규칙 기반 파싱만 사용');
+            setValidationStatus('대용량 PDF 처리 완료 (규칙 기반)');
           }
           setParsedData(data);
         }
-      } else {
-        console.log('ℹ️ AI 검증 비활성화, 규칙 기반 결과 사용');
+      } catch (r2Error) {
+        console.error('❌ R2 업로드 실패:', r2Error);
+        console.log('⚠️ 규칙 기반 결과 사용');
+        setValidationStatus('R2 업로드 실패 (규칙 기반 결과 사용)');
         setParsedData(data);
       }
     } catch (err) {
