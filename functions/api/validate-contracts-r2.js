@@ -6,11 +6,13 @@ import {
   validateWithClaude
 } from '../../cloudflare-workers/src/ai-models.js';
 
+import { validateWithParallelGemini } from '../../cloudflare-workers/src/parallelAIValidator.js';
+
 export async function onRequestPost(context) {
   const { request, env } = context;
 
   try {
-    const { fileKey, parsedData, model = 'auto' } = await request.json();
+    const { fileKey, parsedData, model = 'auto', parallel = false } = await request.json();
 
     if (!fileKey || !parsedData) {
       return new Response(JSON.stringify({
@@ -36,14 +38,36 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Convert to base64
+    // Get PDF ArrayBuffer
     const pdfArrayBuffer = await pdfObject.arrayBuffer();
-    const pdfBase64 = arrayBufferToBase64(pdfArrayBuffer);
     const pdfSizeMB = (pdfArrayBuffer.byteLength / 1024 / 1024).toFixed(2);
 
     console.log(`✅ PDF loaded: ${pdfSizeMB}MB`);
 
-    // Call AI
+    // 병렬 처리 모드 (5MB 이상 PDF만 적용)
+    if (parallel && pdfSizeMB >= 5) {
+      console.log('🚀 병렬 처리 모드 활성화');
+      
+      const validatedData = await validateWithParallelGemini(pdfArrayBuffer, parsedData, env);
+      
+      const duration = Date.now() - startTime;
+      console.log(`✅ Completed in ${duration}ms (parallel mode)`);
+      
+      return new Response(JSON.stringify({
+        ...validatedData,
+        _metadata: {
+          ...validatedData._metadata,
+          pdfSize: `${pdfSizeMB}MB`
+        }
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 단일 처리 모드 (기존 방식)
+    console.log('📄 단일 처리 모드');
+    const pdfBase64 = arrayBufferToBase64(pdfArrayBuffer);
     const validatedData = await callAI(pdfBase64, parsedData, model, env);
 
     const duration = Date.now() - startTime;
@@ -54,7 +78,8 @@ export async function onRequestPost(context) {
       _metadata: {
         processingTime: duration,
         pdfSize: `${pdfSizeMB}MB`,
-        aiModel: validatedData.model || model
+        aiModel: validatedData.model || model,
+        mode: 'single'
       }
     }), {
       status: 200,

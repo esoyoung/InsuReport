@@ -43,11 +43,21 @@ export async function uploadToR2(file) {
  * R2에 저장된 PDF로 AI 검증 수행
  * @param {string} fileKey - R2 파일 키
  * @param {Object} parsedData - 규칙 기반 파싱 결과
+ * @param {Object} options - 옵션 { parallel: boolean, fileSizeMB: number }
  * @returns {Promise<Object>}
  */
-export async function validateContractsWithR2(fileKey, parsedData) {
+export async function validateContractsWithR2(fileKey, parsedData, options = {}) {
   try {
-    console.log('🤖 R2 기반 AI 검증 요청...');
+    const { parallel = false, fileSizeMB = 0 } = options;
+    
+    // 5MB 이상 PDF는 자동으로 병렬 모드 활성화
+    const shouldUseParallel = parallel || (fileSizeMB >= 5);
+    
+    if (shouldUseParallel) {
+      console.log(`🚀 병렬 AI 검증 요청 (${fileSizeMB.toFixed(2)}MB)`);
+    } else {
+      console.log('🤖 R2 기반 AI 검증 요청...');
+    }
 
     const response = await fetch('/api/validate-contracts-r2', {
       method: 'POST',
@@ -57,6 +67,7 @@ export async function validateContractsWithR2(fileKey, parsedData) {
       body: JSON.stringify({
         fileKey,
         parsedData,
+        parallel: shouldUseParallel,
       }),
     });
 
@@ -67,7 +78,17 @@ export async function validateContractsWithR2(fileKey, parsedData) {
 
     const result = await response.json();
 
-    console.log('✅ R2 기반 AI 검증 완료');
+    // 메타데이터에서 처리 모드 확인
+    const mode = result._metadata?.mode || 'single';
+    const processingTime = result._metadata?.processingTime || 0;
+    
+    if (mode === 'parallel') {
+      const { parallelChunks, successfulChunks } = result._metadata;
+      console.log(`✅ 병렬 AI 검증 완료 (${processingTime}ms)`);
+      console.log(`  📊 ${successfulChunks}/${parallelChunks}개 청크 성공`);
+    } else {
+      console.log(`✅ R2 기반 AI 검증 완료 (${processingTime}ms)`);
+    }
 
     if (result.수정사항?.length > 0) {
       console.log('📝 AI 수정 사항:', result.수정사항);
@@ -79,10 +100,12 @@ export async function validateContractsWithR2(fileKey, parsedData) {
         ...parsedData,
         계약리스트: result.계약리스트,
         진단현황: result.진단현황 || parsedData.진단현황, // AI 검증된 진단현황 또는 원본 유지
+        고객정보: result.고객정보 || parsedData.고객정보,
       },
       corrections: result.수정사항,
       totalPremium: result.총보험료,
       activePremium: result.활성월보험료,
+      metadata: result._metadata, // 처리 통계 포함
     };
 
   } catch (error) {

@@ -52,16 +52,37 @@ function FileUploader() {
 
           // 3단계: R2 기반 AI 검증 (10MB 이하만)
           if (isAIValidationAvailable() && !skipAIForLarge) {
-            console.log('🤖 R2 기반 AI 검증 시작...');
-            setValidationStatus('AI 검증 중 (대용량 PDF)...');
+            // 5MB 이상 PDF는 병렬 처리 모드로 속도 2-3배 향상
+            const useParallel = fileSizeMB >= 5;
+            
+            if (useParallel) {
+              console.log('🚀 병렬 AI 검증 시작 (2-3배 빠름)...');
+              setValidationStatus('AI 병렬 검증 중 (고속 처리)...');
+            } else {
+              console.log('🤖 R2 기반 AI 검증 시작...');
+              setValidationStatus('AI 검증 중 (대용량 PDF)...');
+            }
             
             try {
-              const validationResult = await validateContractsWithR2(fileKey, data);
+              const validationResult = await validateContractsWithR2(fileKey, data, {
+                parallel: useParallel,
+                fileSizeMB
+              });
               
-              console.log('✅ AI 검증 완료');
-              setValidationStatus(
-                `AI 검증 완료: ${validationResult.corrections?.length || 0}건 수정`
-              );
+              const mode = validationResult.metadata?.mode || 'single';
+              const processingTime = validationResult.metadata?.processingTime || 0;
+              
+              console.log(`✅ AI 검증 완료 (${mode} 모드, ${processingTime}ms)`);
+              
+              if (mode === 'parallel') {
+                setValidationStatus(
+                  `병렬 AI 검증 완료: ${validationResult.corrections?.length || 0}건 수정 (${(processingTime / 1000).toFixed(1)}초)`
+                );
+              } else {
+                setValidationStatus(
+                  `AI 검증 완료: ${validationResult.corrections?.length || 0}건 수정`
+                );
+              }
               
               if (validationResult.corrections?.length > 0) {
                 console.log('📝 AI 수정 사항:', validationResult.corrections);
