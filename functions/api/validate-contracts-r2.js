@@ -77,25 +77,23 @@ async function callAI(pdfBase64, parsedData, env) {
   // ============================================================================
   // 🎯 ACTIVE MODEL
   // ============================================================================
-  // ✅ GPT-4o (Primary) - TESTING
-  // 💰 Cost: ~$30-40/1000 calls (4-page PDF) - 60% cheaper than Sonnet
-  // 📝 API Key: OPENAI_API_KEY ✓ (User key configured)
-  // 🎯 Best for: Balanced cost/accuracy, excellent PDF Vision
-  // ⚡ Speed: 15-20s (faster than Sonnet)
+  // ✅ Claude Sonnet 4.5 (Primary)
+  // 💰 Cost: ~$100/1000 calls (4-page PDF)
+  // 📝 API Key: ANTHROPIC_API_KEY ✓ Working
+  // 🎯 Best for: Highest accuracy, stable JSON output, reliable
   // ============================================================================
-  console.log('🤖 Using GPT-4o');
-  return await validateWithGPT4o(pdfBase64, parsedData, env);
+  console.log('🤖 Using Claude Sonnet 4.5');
+  return await validateWithClaude(pdfBase64, parsedData, env);
 
   // ============================================================================
-  // 🔄 ALTERNATIVE (Uncomment to switch back)
+  // ❌ GPT-4o - DISABLED (API Key Permission Issues)
   // ============================================================================
-  // Claude Sonnet 4.5
-  // 💰 Cost: ~$100/1000 calls (4-page PDF)
-  // 📝 API Key: ANTHROPIC_API_KEY ✓
-  // 🎯 Best for: Highest accuracy, stable JSON output
+  // Issue: "Missing scopes: model.request"
+  // Both sk-proj-xxx and sk-admin-xxx keys lack necessary permissions
+  // OpenAI API key configuration too complex for this use case
   // ----------------------------------------------------------------------------
-  // console.log('🤖 Using Claude Sonnet 4.5');
-  // return await validateWithClaude(pdfBase64, parsedData, env);
+  // console.log('🤖 Using GPT-4o');
+  // return await validateWithGPT4o(pdfBase64, parsedData, env);
 }
 
 function arrayBufferToBase64(buffer) {
