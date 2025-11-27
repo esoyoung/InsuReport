@@ -10,13 +10,19 @@
  * 📊 AVAILABLE MODELS (status as of 2025-11-27)
  * ============================================================================
  * 
- * ✅ Claude 3.5 Sonnet (Anthropic) - ACTIVE
- *    - Cost: ~$30/1000 calls (4-page PDF)
+ * ✅ Claude Haiku 4.5 (Anthropic) - ACTIVE 🚀 TESTING
+ *    - Cost: ~$33/1000 calls (4-page PDF) - 67% CHEAPER than Sonnet!
  *    - API Key: ANTHROPIC_API_KEY ✓ configured
  *    - PDF Vision: ✓ Direct PDF processing
  *    - Korean: ✓ Excellent support
- *    - Status: Working, ready to use
- *    - Best for: Accurate PDF parsing
+ *    - Status: Testing for cost optimization
+ *    - Best for: Fast & economical PDF parsing
+ *    - Speed: 2-3x faster than Sonnet
+ * 
+ * 🔄 Claude Sonnet 4.5 (Anthropic) - BACKUP
+ *    - Cost: ~$100/1000 calls (4-page PDF)
+ *    - Best for: Complex reasoning, high accuracy
+ *    - Use if: Haiku accuracy insufficient
  * 
  * 🔄 GPT-4o (OpenAI) - AVAILABLE
  *    - Cost: ~$10/1000 calls (4-page PDF)
@@ -30,7 +36,8 @@
  */
 
 /**
- * Claude 3.5 Sonnet - Primary Model
+ * Claude Haiku 4.5 - Primary Model (TESTING - Cost Optimization)
+ * Switch to 'claude-sonnet-4-5-20250929' if accuracy is insufficient
  */
 export async function validateWithClaude(pdfBase64, parsedData, env) {
   const apiKey = env.ANTHROPIC_API_KEY;
@@ -49,7 +56,7 @@ export async function validateWithClaude(pdfBase64, parsedData, env) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-5-20250929',
+      model: 'claude-haiku-4-5-20250929',  // Changed from Sonnet to Haiku for cost optimization
       max_tokens: 8192,
       temperature: 0.1,
       messages: [
