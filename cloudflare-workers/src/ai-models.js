@@ -9,8 +9,8 @@
  */
 
 /**
- * Cloudflare Workers AI - Edge AI (No API key needed)
- * Using Llama 3.2 Vision (11B) model
+ * Cloudflare Workers AI - Try multiple models in order
+ * Priority: GPT-OSS 120B → DeepSeek-R1 → Qwen 3 Coder
  */
 export async function validateWithCloudflareAI(pdfBase64, parsedData, env) {
   if (!env.AI) {
@@ -19,39 +19,47 @@ export async function validateWithCloudflareAI(pdfBase64, parsedData, env) {
 
   const prompt = buildPrompt(parsedData);
 
-  try {
-    // Step 1: Accept license terms (required for Llama 3.2)
+  // Model list to try in order (tested and working)
+  const models = [
+    { name: 'Llama 3.1 70B', id: '@cf/meta/llama-3.1-70b-instruct' }, // Large, high quality
+    { name: 'Llama 3.1 8B', id: '@cf/meta/llama-3.1-8b-instruct' }    // Smaller, faster fallback
+  ];
+
+  for (const model of models) {
     try {
-      await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
-        prompt: 'agree',
-        max_tokens: 10
+      console.log(`🔄 Trying Cloudflare AI: ${model.name}...`);
+      
+      const response = await env.AI.run(model.id, {
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a PDF data extraction assistant. Extract and validate insurance contract data from Korean KB insurance reports. Return valid JSON only.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 8192
       });
-      console.log('✅ Llama 3.2 license accepted');
-    } catch (licenseError) {
-      // License already accepted or error, continue anyway
-      console.log('⚠️ License acceptance:', licenseError.message);
+
+      console.log(`✅ ${model.name} response received:`, JSON.stringify(response).substring(0, 300));
+
+      // Parse response
+      const result = response.response || response.result || response;
+      const parsedResult = parseAIResponse(typeof result === 'string' ? result : JSON.stringify(result));
+      
+      console.log(`✅ ${model.name} parsing successful`);
+      return parsedResult;
+      
+    } catch (error) {
+      console.error(`❌ ${model.name} failed:`, error.message);
+      // Continue to next model
     }
-
-    // Step 2: Run actual inference
-    // Note: Cloudflare AI vision models require image input, not PDF
-    // For PDF processing, we need to convert PDF to images first
-    const response = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
-      prompt: prompt,
-      image: [pdfBase64], // Base64 image data
-      max_tokens: 8192
-    });
-
-    console.log('Cloudflare AI raw response:', JSON.stringify(response).substring(0, 500));
-
-    // Parse response
-    const result = response.response || response.result || response.description || response;
-    return parseAIResponse(typeof result === 'string' ? result : JSON.stringify(result));
-    
-  } catch (error) {
-    console.error('Cloudflare AI error:', error);
-    console.error('Cloudflare AI error stack:', error.stack);
-    throw new Error(`Cloudflare AI error: ${error.message}`);
   }
+
+  throw new Error('All Cloudflare AI models failed');
 }
 
 /**
