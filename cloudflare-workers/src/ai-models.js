@@ -164,6 +164,7 @@ export async function validateWithEnsemble(pdfBase64, parsedData, env) {
 
   // 1st: Try Gemini (Fast & Cheap)
   try {
+    console.log('🔄 Trying Gemini...');
     const geminiResult = await validateWithGemini(pdfBase64, parsedData, env);
     const confidence = calculateConfidence(geminiResult);
     
@@ -180,11 +181,13 @@ export async function validateWithEnsemble(pdfBase64, parsedData, env) {
     console.log(`⚠️ Gemini confidence low (${(confidence * 100).toFixed(1)}%), trying GPT-4o...`);
   } catch (error) {
     console.error('❌ Gemini failed:', error.message);
+    console.error('❌ Gemini error details:', error.stack);
   }
 
   // 2nd: Try GPT-4o (High Accuracy)
   if (env.OPENAI_API_KEY) {
     try {
+      console.log('🔄 Trying GPT-4o...');
       const gpt4oResult = await validateWithGPT4o(pdfBase64, parsedData, env);
       console.log('✅ GPT-4o result - High confidence');
       
@@ -195,12 +198,16 @@ export async function validateWithEnsemble(pdfBase64, parsedData, env) {
       };
     } catch (error) {
       console.error('❌ GPT-4o failed:', error.message);
+      console.error('❌ GPT-4o error details:', error.stack);
     }
+  } else {
+    console.log('⚠️ OPENAI_API_KEY not configured, skipping GPT-4o');
   }
 
   // 3rd: Try Claude (Fallback)
   if (env.ANTHROPIC_API_KEY) {
     try {
+      console.log('🔄 Trying Claude...');
       const claudeResult = await validateWithClaude(pdfBase64, parsedData, env);
       console.log('✅ Claude result - Fallback');
       
@@ -211,9 +218,13 @@ export async function validateWithEnsemble(pdfBase64, parsedData, env) {
       };
     } catch (error) {
       console.error('❌ Claude failed:', error.message);
+      console.error('❌ Claude error details:', error.stack);
     }
+  } else {
+    console.log('⚠️ ANTHROPIC_API_KEY not configured, skipping Claude');
   }
 
+  console.error('❌ All AI models failed - no API keys configured or all models returned errors');
   throw new Error('All AI models failed');
 }
 

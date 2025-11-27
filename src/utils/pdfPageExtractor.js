@@ -58,6 +58,8 @@ export async function analyzePDFPages(pdfFile) {
       pageTitle = '진단 현황';
     }
     
+
+    
     pages.push({
       pageNum,
       text: pageText,
