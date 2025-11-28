@@ -106,10 +106,34 @@ primary: {
 - **PDF Processing**: PDF.js
 - **언어**: JavaScript (ES6+)
 
+## 🚀 배포
+
+### Cloudflare Pages 자동 배포
+
+**production 브랜치에 push하면 자동으로 배포됩니다!**
+
+```bash
+# production 브랜치로 전환
+git checkout production
+
+# main 브랜치 변경사항 병합
+git merge main
+
+# GitHub에 push (자동 배포 트리거)
+git push origin production
+```
+
+자세한 설정 방법은 [DEPLOYMENT.md](./DEPLOYMENT.md) 참고
+
+### 💰 비용 최적화
+- AI 검증 기능 비활성화로 API 비용 제로
+- Cloudflare Pages 무료 플랜 (월 500회 빌드)
+- 규칙 기반 PDF 파싱만 사용
+
 ## 📋 향후 추가 예정 기능
 
 - [ ] 생애설계 그래프 (나이 마커 표시)
-- [ ] AI 분석 보고서 (Gemini API 연동)
+- [ ] AI 분석 보고서 (선택적 활성화)
   - Needs 환기 양식
   - 편지 양식
   - 일반 보고서 양식
