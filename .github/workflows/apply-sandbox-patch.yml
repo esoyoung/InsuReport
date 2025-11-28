@@ -1,0 +1,108 @@
+name: 🔄 Apply Sandbox Patch
+
+on:
+  workflow_dispatch:
+    inputs:
+      patch_url:
+        description: 'Patch file URL (from sandbox outputs)'
+        required: true
+        type: string
+      commit_message:
+        description: 'Custom commit message (optional)'
+        required: false
+        type: string
+        default: 'chore: apply sandbox patch'
+
+jobs:
+  apply-patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: production
+          fetch-depth: 0
+          
+      - name: 🔧 Configure Git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          
+      - name: 📦 Download patch file
+        run: |
+          echo "📥 Downloading patch from: ${{ github.event.inputs.patch_url }}"
+          curl -L -o changes.patch "${{ github.event.inputs.patch_url }}"
+          
+          echo "📊 Patch file size:"
+          ls -lh changes.patch
+          
+          echo "📄 Patch preview:"
+          head -50 changes.patch
+          
+      - name: ✅ Validate patch file
+        run: |
+          if [ ! -s changes.patch ]; then
+            echo "❌ Error: Patch file is empty"
+            exit 1
+          fi
+          
+          echo "✅ Patch file is valid"
+          
+      - name: 🔄 Apply patch
+        id: apply
+        run: |
+          echo "🔄 Applying patch..."
+          
+          # Try to apply patch
+          if git am changes.patch; then
+            echo "✅ Patch applied successfully"
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Failed to apply with 'git am', trying 'git apply'..."
+            git am --abort 2>/dev/null || true
+            
+            if git apply changes.patch; then
+              echo "✅ Patch applied with 'git apply'"
+              
+              # Get commit message from input or use default
+              COMMIT_MSG="${{ github.event.inputs.commit_message }}"
+              if [ -z "$COMMIT_MSG" ]; then
+                COMMIT_MSG="chore: apply sandbox patch"
+              fi
+              
+              git add -A
+              git commit -m "$COMMIT_MSG"
+              echo "success=true" >> $GITHUB_OUTPUT
+            else
+              echo "❌ Failed to apply patch"
+              echo "success=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          fi
+          
+      - name: 📤 Push changes
+        if: steps.apply.outputs.success == 'true'
+        run: |
+          echo "📤 Pushing to production branch..."
+          git push origin production
+          echo "✅ Push completed!"
+          
+      - name: 📊 Show applied changes
+        if: steps.apply.outputs.success == 'true'
+        run: |
+          echo "📊 Changes applied:"
+          git log -1 --stat
+          
+      - name: ❌ Handle failure
+        if: failure()
+        run: |
+          echo "❌ Patch application failed!"
+          echo "Please check the patch file or apply manually."
+          echo ""
+          echo "Manual application steps:"
+          echo "1. Download patch: curl -L -o patch.file ${{ github.event.inputs.patch_url }}"
+          echo "2. Apply locally: git am patch.file"
+          echo "3. Push: git push origin production"
