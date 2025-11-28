@@ -1,14 +1,14 @@
-// Cloudflare Pages Function for direct PDF AI validation
+// Cloudflare Pages Function for AI PDF validation
 import {
-  validateWithClaude,
-  validateWithGPT4o
+  validateWithGemini,
+  validateWithClaude
 } from './ai-models.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
 
   try {
-    const { pdfBase64, parsedData, model = 'auto' } = await request.json();
+    const { pdfBase64, parsedData } = await request.json();
 
     if (!pdfBase64 || !parsedData) {
       return new Response(JSON.stringify({
@@ -19,26 +19,26 @@ export async function onRequestPost(context) {
       });
     }
 
-    console.log(`🤖 Direct AI validation (model: ${model})`);
+    console.log('🤖 Starting AI validation');
     const startTime = Date.now();
 
-    const validatedData = await callAI(pdfBase64, parsedData, model, env);
+    const validatedData = await callAI(pdfBase64, parsedData, env);
     const duration = Date.now() - startTime;
 
-    console.log(`✅ Completed in ${duration}ms`);
+    console.log(`✅ AI validation completed in ${duration}ms`);
 
     return new Response(JSON.stringify({
       ...validatedData,
       _metadata: {
         processingTime: duration,
-        aiModel: validatedData.model || model
+        aiModel: validatedData.model
       }
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error('❌ AI validation error:', error);
     return new Response(JSON.stringify({
       error: error.message
     }), {
@@ -50,22 +50,26 @@ export async function onRequestPost(context) {
 
 async function callAI(pdfBase64, parsedData, env) {
   // ============================================================================
-  // 🎯 ACTIVE MODEL
+  // 🎯 ACTIVE MODEL (한 번에 하나만 활성화)
   // ============================================================================
-  // ✅ Claude 3.5 Sonnet (Primary)
-  // 💰 Cost: ~$30/1000 calls (4-page PDF)
-  // 📝 API Key: ANTHROPIC_API_KEY ✓
-  // ============================================================================
-  console.log('🤖 Using Claude 3.5 Sonnet');
-  return await validateWithClaude(pdfBase64, parsedData, env);
+  
+  // ✅ Google Gemini 2.0 Flash (PRIMARY - RECOMMENDED)
+  // 💰 Cost: FREE (rate limited) or ~$0.075 per 1M tokens
+  // 📝 API Key: GEMINI_API_KEY
+  // 🚀 Best for: Cost-effective, fast, accurate
+  // ----------------------------------------------------------------------------
+  console.log('🤖 Using Google Gemini 2.0 Flash');
+  return await validateWithGemini(pdfBase64, parsedData, env);
 
   // ============================================================================
-  // 🔄 ALTERNATIVE (Uncomment to switch)
+  // 🔄 ALTERNATIVE MODEL (Uncomment to switch)
   // ============================================================================
-  // GPT-4o
-  // 💰 Cost: ~$10/1000 calls
-  // 📝 API Key: OPENAI_API_KEY (not configured)
+  
+  // ❌ Anthropic Claude Sonnet 4.5 (ALTERNATIVE)
+  // 💰 Cost: ~$0.10/validation (4-page PDF)
+  // 📝 API Key: ANTHROPIC_API_KEY
+  // 🎯 Best for: Maximum accuracy, critical validations
   // ----------------------------------------------------------------------------
-  // console.log('🤖 Using GPT-4o');
-  // return await validateWithGPT4o(pdfBase64, parsedData, env);
+  // console.log('🤖 Using Anthropic Claude Sonnet 4.5');
+  // return await validateWithClaude(pdfBase64, parsedData, env);
 }

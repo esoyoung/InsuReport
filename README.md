@@ -126,13 +126,16 @@ git push origin production
 자세한 설정 방법은 [DEPLOYMENT.md](./DEPLOYMENT.md) 참고
 
 ### 🤖 AI 검증
-- **Anthropic Claude Sonnet 4.5** (Primary)
-- **OpenAI GPT-4o** (Alternative)
+- **Google Gemini 2.0 Flash** (Primary - 무료/저렴)
+- **Anthropic Claude Sonnet 4.5** (Alternative - 고정확도)
 - PDF 직접 처리로 높은 정확도
+- 간단한 주석 변경으로 모델 전환
 - 자세한 설정: [AI_SETUP.md](./AI_SETUP.md)
 
 ### 💰 비용 관리
-- AI 검증 활성화 시: ~$0.01-0.10/검증
+- **Gemini 무료**: $0/월 (월 1,500회 검증) ⭐ 추천!
+- Gemini 유료: ~$0.0075/검증
+- Claude: ~$0.10/검증 (고정확도 필요 시)
 - 개발 중 비활성화 가능 (비용 $0)
 - Cloudflare Pages 무료 플랜
 
