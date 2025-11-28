@@ -454,13 +454,18 @@ function parseAIResponse(responseText) {
     
   
   // 🔍 디버그: AI가 반환한 모든 키 확인
+  // 🔍 중요: JSON 파싱 전 원본 확인 (실효해지계약 키 손실 디버깅)
+console.log('📄 AI 원본 응답 (처음 500자):', cleanedText.substring(0, 500));
+console.log('📄 실효해지계약 키워드 존재?:', cleanedText.includes('실효해지계약'));
 console.log('🔍 AI 반환 키 목록:', Object.keys(parsed));
 console.log('🔍 실효해지계약 관련 키:', Object.keys(parsed).filter(k => k.includes('실효') || k.includes('해지')));
 
 // 🚨 중요: 실효해지계약 키 이름 정규화 (AI가 다양한 이름으로 반환 가능)
 const terminatedKeys = ['실효해지계약', '실효·해지계약', '실효/해지계약', 'lapsedContracts', 'terminatedContracts'];
 let terminatedData = null;
+console.log('📊 전체 JSON 구조:', JSON.stringify(parsed, null, 2).substring(0, 2000));
 
+    
 for (const key of terminatedKeys) {
   if (parsed[key]) {
     terminatedData = parsed[key];
