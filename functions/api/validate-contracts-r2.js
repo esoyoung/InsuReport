@@ -2,7 +2,7 @@
 import {
   validateWithClaude,
   validateWithGPT4o
-} from '../../cloudflare-workers/src/ai-models.js';
+} from './ai-models.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
