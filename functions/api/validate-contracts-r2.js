@@ -83,8 +83,8 @@ async function callAI(pdfBase64, parsedData, env) {
   // 🎯 Best for: Cost-effective, fast (20-30s), accurate
   // ⚡ Speed: 2x faster than Claude, 90% cheaper
   // ============================================================================
-  console.log('🤖 Using Google Gemini 2.0 Flash');
-  return await validateWithGemini(pdfBase64, parsedData, env);
+  // console.log('🤖 Using Google Gemini 2.0 Flash');
+  // return await validateWithGemini(pdfBase64, parsedData, env);
 
   // ============================================================================
   // 💤 Claude Sonnet 4.5 - STANDBY (High Accuracy Alternative)
@@ -94,8 +94,8 @@ async function callAI(pdfBase64, parsedData, env) {
   // Best for: Maximum accuracy, when cost is not a concern
   // To switch back: Uncomment below, comment Gemini above
   // ----------------------------------------------------------------------------
-  // console.log('🤖 Using Claude Sonnet 4.5');
-  // return await validateWithClaude(pdfBase64, parsedData, env);
+  console.log('🤖 Using Claude Sonnet 4.5');
+  return await validateWithClaude(pdfBase64, parsedData, env);
 }
 
 function arrayBufferToBase64(buffer) {
