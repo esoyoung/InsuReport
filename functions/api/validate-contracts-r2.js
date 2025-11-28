@@ -1,7 +1,7 @@
 // Cloudflare Pages Function for AI Validation (R2-based)
 import {
   validateWithClaude,
-  validateWithGPT4o
+  validateWithGemini
 } from './ai-models.js';
 
 export async function onRequestPost(context) {
