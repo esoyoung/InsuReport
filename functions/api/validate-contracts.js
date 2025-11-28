@@ -53,23 +53,23 @@ async function callAI(pdfBase64, parsedData, env) {
   // 🎯 ACTIVE MODEL (한 번에 하나만 활성화)
   // ============================================================================
   
-  // ✅ Google Gemini 2.0 Flash (PRIMARY - RECOMMENDED)
+  // ❌ Google Gemini 2.0 Flash (PRIMARY - RECOMMENDED)
   // 💰 Cost: FREE (rate limited) or ~$0.075 per 1M tokens
   // 📝 API Key: GEMINI_API_KEY
   // 🚀 Best for: Cost-effective, fast, accurate
   // ----------------------------------------------------------------------------
-  console.log('🤖 Using Google Gemini 2.0 Flash');
-  return await validateWithGemini(pdfBase64, parsedData, env);
+  // console.log('🤖 Using Google Gemini 2.0 Flash');
+  // return await validateWithGemini(pdfBase64, parsedData, env);
 
   // ============================================================================
   // 🔄 ALTERNATIVE MODEL (Uncomment to switch)
   // ============================================================================
   
-  // ❌ Anthropic Claude Sonnet 4.5 (ALTERNATIVE)
+  // ✅ Anthropic Claude Sonnet 4.5 (ACTIVE - Testing)
   // 💰 Cost: ~$0.10/validation (4-page PDF)
   // 📝 API Key: ANTHROPIC_API_KEY
   // 🎯 Best for: Maximum accuracy, critical validations
   // ----------------------------------------------------------------------------
-  // console.log('🤖 Using Anthropic Claude Sonnet 4.5');
-  // return await validateWithClaude(pdfBase64, parsedData, env);
+  console.log('🤖 Using Anthropic Claude Sonnet 4.5');
+  return await validateWithClaude(pdfBase64, parsedData, env);
 }
