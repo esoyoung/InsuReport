@@ -56,7 +56,16 @@ const renderCellContent = (content, { align = 'left', fallback = '—' } = {}) =
 
 export default function TerminatedContractsTable({ data }) {
   const insuranceData = data || {};
+  
+  // 🔍 디버그: 전체 데이터 구조 확인
+  console.log('📦 TerminatedContractsTable - 전체 데이터:', insuranceData);
+  console.log('📦 실효해지계약 키 존재?:', '실효해지계약' in insuranceData);
+  console.log('📦 모든 키 목록:', Object.keys(insuranceData));
+  
   const terminatedList = insuranceData.실효해지계약 || [];
+  console.log('📦 추출된 실효해지계약:', terminatedList);
+  console.log('📦 배열 길이:', terminatedList.length);
+  
   const hasContracts = terminatedList.length > 0;
 
   if (!insuranceData.고객정보 && !hasContracts) {
