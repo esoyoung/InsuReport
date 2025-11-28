@@ -125,10 +125,16 @@ git push origin production
 
 자세한 설정 방법은 [DEPLOYMENT.md](./DEPLOYMENT.md) 참고
 
-### 💰 비용 최적화
-- AI 검증 기능 비활성화로 API 비용 제로
-- Cloudflare Pages 무료 플랜 (월 500회 빌드)
-- 규칙 기반 PDF 파싱만 사용
+### 🤖 AI 검증
+- **Anthropic Claude Sonnet 4.5** (Primary)
+- **OpenAI GPT-4o** (Alternative)
+- PDF 직접 처리로 높은 정확도
+- 자세한 설정: [AI_SETUP.md](./AI_SETUP.md)
+
+### 💰 비용 관리
+- AI 검증 활성화 시: ~$0.01-0.10/검증
+- 개발 중 비활성화 가능 (비용 $0)
+- Cloudflare Pages 무료 플랜
 
 ## 📋 향후 추가 예정 기능
 

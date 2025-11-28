@@ -105,7 +105,9 @@ git push origin production  # 🚀 자동 배포 트리거!
    - Build command: `npm run build`
    - Build output directory: `dist`
 6. Environment variables 설정:
-   - `VITE_USE_AI_VALIDATION` = `false`
+   - `VITE_USE_AI_VALIDATION` = `true`
+   - `ANTHROPIC_API_KEY` = (your Anthropic API key)
+   - `OPENAI_API_KEY` = (your OpenAI API key, optional)
 
 ---
 
