@@ -4,7 +4,6 @@ import ContractSummaryTable from './tables/ContractSummaryTable';
 import ContractListTable from './tables/ContractListTable';
 import TerminatedContractsTable from './tables/TerminatedContractsTable';
 import DiagnosisTable from './tables/DiagnosisTable';
-import ProductCoverageDetailTable from './tables/ProductCoverageDetailTable';
 
 const sanitizeNumericValue = (value) => {
   if (typeof value === 'number') return value;
@@ -95,11 +94,6 @@ function ReportViewer() {
         {/* 4. 담보별 진단현황 */}
         <section className="page-break">
           <DiagnosisTable data={parsedData} />
-        </section>
-
-        {/* 5. 상품별 가입담보상세 */}
-        <section className="page-break">
-          <ProductCoverageDetailTable data={parsedData} />
         </section>
       </div>
     </div>
