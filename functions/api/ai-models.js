@@ -452,10 +452,33 @@ function parseAIResponse(responseText) {
   try {
     const parsed = JSON.parse(cleanedText);
     
-    // Validate required fields
-    if (!parsed.고객정보 || !parsed.계약리스트 || !parsed.진단현황) {
-      throw new Error('Missing required fields in AI response');
-    }
+  
+  // 🔍 디버그: AI가 반환한 모든 키 확인
+console.log('🔍 AI 반환 키 목록:', Object.keys(parsed));
+console.log('🔍 실효해지계약 관련 키:', Object.keys(parsed).filter(k => k.includes('실효') || k.includes('해지')));
+
+// 🚨 중요: 실효해지계약 키 이름 정규화 (AI가 다양한 이름으로 반환 가능)
+const terminatedKeys = ['실효해지계약', '실효·해지계약', '실효/해지계약', 'lapsedContracts', 'terminatedContracts'];
+let terminatedData = null;
+
+for (const key of terminatedKeys) {
+  if (parsed[key]) {
+    terminatedData = parsed[key];
+    console.log(`✅ 실효해지계약 데이터 발견! 키: "${key}", 개수: ${terminatedData.length}`);
+    break;
+  }
+}
+
+// 정규화된 키로 저장
+parsed.실효해지계약 = terminatedData || [];
+
+// 원래 키 정리 (중복 방지)
+terminatedKeys.forEach(key => {
+  if (key !== '실효해지계약' && parsed[key]) {
+    delete parsed[key];
+  }
+});
+
     
     // 담보별현황은 더 이상 사용하지 않음 (진단현황으로 통합)
     if (parsed.담보별현황) {
