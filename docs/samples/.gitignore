@@ -1,0 +1,14 @@
+# 대용량 PDF 파일은 Git에서 제외
+*.pdf
+
+# 작은 샘플 파일만 예외 (1MB 미만)
+# !sample-small.pdf
+
+# 이미지는 포함
+!*.jpg
+!*.png
+!*.gif
+
+# 설명 파일은 포함
+!README.md
+!*.txt
