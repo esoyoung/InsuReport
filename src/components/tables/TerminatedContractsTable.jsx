@@ -104,7 +104,7 @@ export default function TerminatedContractsTable({ data }) {
           <thead className="bg-teal-50">
             <tr>
               <th scope="col" className="px-1 py-2 text-center text-primary-700 font-semibold align-middle" style={{ width: '3rem' }}>
-                상태
+                번호
               </th>
               <th scope="col" className="px-1 py-2 text-left text-primary-700 font-semibold align-middle" style={{ width: '6rem' }}>
                 회사명
@@ -131,7 +131,7 @@ export default function TerminatedContractsTable({ data }) {
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
             {terminatedList.map((contract, index) => {
-              const status = contract.상태 || '해지';
+              const rowNumber = contract.번호 || (index + 1);
               const company = contract.회사명 || contract.보험사 || '—';
               const product = contract.상품명 || '—';
               const contractDate = contract.계약일 || contract.가입일 || '—';
@@ -177,7 +177,7 @@ export default function TerminatedContractsTable({ data }) {
               return (
                 <tr key={`terminated-${index}`} className="hover:bg-gray-50 align-middle">
                   <td className="px-1 py-2 text-gray-700 align-middle text-center">
-                    {status}
+                    {rowNumber}
                   </td>
                   <td className="px-1 py-2 text-gray-700 align-middle">
                     {renderCellContent(companyLines, { align: 'left' })}
