@@ -174,16 +174,33 @@ export async function validateWithGPT5Codex(pdfBase64, parsedData, env) {
       messages: [
         {
           role: 'system',
-          content: `You are an expert insurance document analyzer with strict data integrity rules:
+          content: `You are an expert insurance document analyzer with STRICT validation rules:
 
-1. Extract ONLY data that actually exists in the PDF - never fabricate or guess
-2. If a section is not found after thorough search, return empty array [] - DO NOT create fake data
-3. Follow the exact JSON schema provided - key names, types, and structure must match precisely
-4. For missing optional data fields, use null - but for missing entire sections, use empty arrays
-5. Maintain the exact order specified in templates - never reorder data
-6. When data is ambiguous or unclear, prefer empty result over guessed data
+**DATA INTEGRITY (Highest Priority):**
+1. Extract ONLY data that exists in PDF - NEVER fabricate, guess, or invent
+2. Missing sections → empty array [] (NO fake data with null values)
+3. Follow exact JSON schema - key names, types, structure must match 100%
+4. Missing optional fields → null, Missing entire sections → []
+5. Maintain exact order from templates - NEVER reorder or sort
 
-CRITICAL: Your accuracy is measured by precision (no false data) over recall (finding everything).`
+**진단현황 CRITICAL RULES:**
+1. Use ONLY the 35 coverage names provided in the template - NO variations allowed
+2. Match PDF coverage names to template names exactly:
+   - "상해 사망" → "상해사망"
+   - "일반암 진단" → "일반암"
+   - DO NOT create new coverage names like "상해사망보장", "암진단비"
+3. Calculate diagnosis correctly:
+   - 가입금액 = 0 → "미가입"
+   - 가입금액 > 0 AND < 권장금액 → "부족"
+   - 가입금액 ≥ 권장금액 → "충분"
+4. Include ALL 35 coverages in the exact order provided
+5. NEVER skip or reorder coverages
+
+**EXAMPLE:**
+권장금액: 200000000 (2억), 가입금액: 15000000 (1500만)
+→ 진단: "부족" (NOT "미가입")
+
+Your accuracy = precision (no false data) > recall (finding everything).`
         },
         {
           role: 'user',
@@ -361,7 +378,9 @@ KB 보험 보장분석 리포트 검증 시스템. 원본 PDF에서 4개 섹션 
    - 미가입: 부족금액 = 권장금액, 권장금액을 표시하고 부족 표시 
 
 
-   **📝 기본 순서 템플릿 (35개 항목, 6개 카테고리):**
+   **📝 필수 담보명 리스트 (35개 항목 - 이 이름만 사용할 것):**
+   
+   **🚨 중요: 아래 담보명을 정확히 사용하고, 새로운 담보명을 만들지 말 것**
    
    **[사망장해/치매간병]**
    1. 상해사망
@@ -407,6 +426,29 @@ KB 보험 보장분석 리포트 검증 시스템. 원본 PDF에서 4개 섹션 
    33. 자동차사고부상
    34. 가족/일상/자녀배상
    35. 화재벌금
+
+   **📋 담보명 매칭 규칙:**
+   
+   PDF에서 추출한 담보명을 위 35개 중 하나로 매칭:
+   - "상해 사망" → "상해사망"
+   - "일반암 진단" → "일반암"
+   - "뇌졸중 진단" → "뇌졸중"
+   - "허혈성 심장질환" → "허혈성심장질환"
+   
+   **⚠️ 절대 금지:**
+   - ❌ 위 35개 외 새로운 담보명 생성 금지
+   - ❌ 담보명 변형 금지 (예: "상해사망보장" → 사용 불가)
+   - ❌ 영어나 약어 사용 금지
+   
+   **📊 진단 상태 계산 로직:**
+   - **미가입**: 가입금액 = 0
+   - **부족**: 가입금액 > 0 AND 가입금액 < 권장금액
+   - **충분**: 가입금액 ≥ 권장금액
+   
+   **예시:**
+   - 권장금액 200,000,000원, 가입금액 15,000,000원 → 진단: "부족"
+   - 권장금액 200,000,000원, 가입금액 0원 → 진단: "미가입"
+   - 권장금액 200,000,000원, 가입금액 200,000,000원 → 진단: "충분"
 
 **🔍 주의사항:**
 - 보험사명이 여러 줄에 걸쳐 있으면 합쳐서 하나로 작성
@@ -535,19 +577,34 @@ ${JSON.stringify(parsedData, null, 2)}
   "진단현황": [
     {
       "담보명": "상해사망",
-      "권장금액": number,
-      "가입금액": number,
-      "부족금액": number | null,
-      "진단": "부족" | "충분" | "미가입"
+      "권장금액": 200000000,
+      "가입금액": 15000000,
+      "부족금액": 185000000,
+      "진단": "부족"
     },
     {
       "담보명": "질병사망",
-      "권장금액": number,
-      "가입금액": number,
-      "부족금액": number | null,
-      "진단": "부족" | "충분" | "미가입"
+      "권장금액": 150000000,
+      "가입금액": 0,
+      "부족금액": 150000000,
+      "진단": "미가입"
+    },
+    {
+      "담보명": "상해80%미만후유장해",
+      "권장금액": 100000000,
+      "가입금액": 100000000,
+      "부족금액": null,
+      "진단": "충분"
+    },
+    {
+      "담보명": "질병80%미만후유장해",
+      "권장금액": 50000000,
+      "가입금액": 30000000,
+      "부족금액": 20000000,
+      "진단": "부족"
     }
-    // ... (35개 담보 모두 포함, 순서대로)
+    // ... (35개 담보를 위 순서대로 모두 포함)
+    // 담보명은 반드시 위에 제시된 35개 중 하나여야 함
   ],
   "수정사항": ["string"]
 }
