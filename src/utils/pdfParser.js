@@ -536,12 +536,25 @@ function parseTerminatedContracts(text) {
     // ============================================================================
     // 날짜 이전: 회사명 + 상품명 추출
     // ============================================================================
-    // "해지*" 또는 "실효*" 접두사를 먼저 제거
-    const cleanedBeforeDate = beforeDate.replace(/^(해지|실효)\*?\s*/, '').trim();
+    // Step 1: "해지*" 또는 "실효*" 패턴 완전 제거
+    let cleanedBeforeDate = beforeDate
+      .replace(/해지\*/g, '')
+      .replace(/실효\*/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // Step 2: "無" 접두사 제거 (無MG → MG)
+    cleanedBeforeDate = cleanedBeforeDate.replace(/(無|무|\(무\))/g, '');
+    
     const beforeTokens = cleanedBeforeDate.split(' ').filter(Boolean);
     
     let 회사명 = '';
     let 상품명 = '';
+    
+    if (beforeTokens.length === 0) {
+      console.warn(`  ⚠️ ${번호}번 행: 회사명/상품명 추출 불가`);
+      continue;
+    }
     
     // 회사명 찾기 (KNOWN_COMPANY_MAP 활용)
     let companyFound = false;
@@ -562,18 +575,15 @@ function parseTerminatedContracts(text) {
       if (companyFound) break;
     }
     
-    // 회사명을 찾지 못한 경우
+    // 회사명을 찾지 못한 경우: 첫 토큰을 회사명으로
     if (!companyFound && beforeTokens.length > 0) {
-      // "無MG" 같은 패턴 확인
-      if (/^(無|무|\(무\))?[가-힣A-Z]+/.test(beforeTokens[0])) {
-        // 첫 토큰에서 "無" 제거 후 회사명으로 사용
-        회사명 = beforeTokens[0].replace(/^(無|무|\(무\))/, '').trim();
-        상품명 = beforeTokens.slice(1).join(' ').trim();
-      } else {
-        // 일반 경우: 첫 토큰을 회사명으로
-        회사명 = beforeTokens[0];
-        상품명 = beforeTokens.slice(1).join(' ').trim();
-      }
+      회사명 = beforeTokens[0];
+      상품명 = beforeTokens.slice(1).join(' ').trim();
+    }
+    
+    // 상품명이 비어있으면 전체를 상품명으로
+    if (!상품명 && beforeTokens.length > 0) {
+      상품명 = beforeTokens.join(' ').trim();
     }
     
     // ============================================================================
