@@ -489,22 +489,39 @@ function parseTerminatedContracts(text) {
   });
   
   // 번호로 시작하지 않는 줄은 이전 줄과 병합 (2줄짜리 상품명 처리)
+  // 강화된 병합 로직: 날짜(YYYY-MM-DD)가 없는 줄은 모두 이전 줄에 병합
   const mergedLines = [];
+  let mergeCount = 0;
+  
   for (let i = 0; i < lines.length; i++) {
-    const currentLine = lines[i];
+    const currentLine = lines[i].trim();
+    if (!currentLine) continue;
     
-    // 번호로 시작하면 새로운 행
-    if (/^\d+\s+/.test(currentLine)) {
+    // 번호(1-9로 시작) + 공백으로 시작하면 새로운 행
+    const isNewRow = /^\d+\s+/.test(currentLine);
+    
+    // 날짜가 있는지 확인 (YYYY-MM-DD 패턴)
+    const hasDate = /\d{4}-\d{2}-\d{2}/.test(currentLine);
+    
+    if (isNewRow && hasDate) {
+      // 새로운 완전한 행
       mergedLines.push(currentLine);
+      console.log(`  [행 ${mergedLines.length}] 신규: ${currentLine.substring(0, 60)}...`);
     } else {
-      // 번호가 없으면 이전 행에 병합
+      // 이전 행에 병합
       if (mergedLines.length > 0) {
-        mergedLines[mergedLines.length - 1] += ' ' + currentLine;
+        const oldLine = mergedLines[mergedLines.length - 1];
+        mergedLines[mergedLines.length - 1] = oldLine + ' ' + currentLine;
+        mergeCount++;
+        console.log(`  [행 ${mergedLines.length}] 병합: "${currentLine.substring(0, 40)}..." → 이전 행에 추가`);
+      } else {
+        // 첫 줄인데 날짜가 없으면 새로운 행으로 추가 (오류 방지)
+        mergedLines.push(currentLine);
       }
     }
   }
   
-  console.log(`📋 실효/해지 계약: ${mergedLines.length}개 행 감지 (2줄 병합 완료)`);
+  console.log(`📋 실효/해지 계약: ${lines.length}개 행 감지 → ${mergedLines.length}개 행 (${mergeCount}개 행 병합 완료)`);
   
   // ============================================================================
   // 각 행 파싱 (완전 재설계)
