@@ -174,7 +174,16 @@ export async function validateWithGPT5Codex(pdfBase64, parsedData, env) {
       messages: [
         {
           role: 'system',
-          content: 'You are an expert insurance document analyzer. Extract data from PDF with 100% accuracy following the exact schema provided.'
+          content: `You are an expert insurance document analyzer with strict data integrity rules:
+
+1. Extract ONLY data that actually exists in the PDF - never fabricate or guess
+2. If a section is not found after thorough search, return empty array [] - DO NOT create fake data
+3. Follow the exact JSON schema provided - key names, types, and structure must match precisely
+4. For missing optional data fields, use null - but for missing entire sections, use empty arrays
+5. Maintain the exact order specified in templates - never reorder data
+6. When data is ambiguous or unclear, prefer empty result over guessed data
+
+CRITICAL: Your accuracy is measured by precision (no false data) over recall (finding everything).`
         },
         {
           role: 'user',
@@ -282,15 +291,29 @@ KB 보험 보장분석 리포트 검증 시스템. 원본 PDF에서 4개 섹션 
    - [ ] 작은 글씨, 각주, 페이지 하단도 확인했는가?
    - [ ] 최소 1회 이상 "실효", "해지" 키워드 검색을 시도했는가?
    
-   **📋 반환 규칙**:
-   - **실제로 없는 경우**: 빈 배열 [] 반환
-   - **찾았으나 정보 부족**: 있는 정보만 채우고 나머지는 null
-   - **확신 없음**: 의심되는 데이터라도 포함 (수정사항에 "불확실" 명시)
+   **📋 반환 규칙 (엄격히 준수):**
+   
+   **🚨 중요: PDF에 실효/해지 계약 섹션이 없으면 빈 배열 [] 반환**
+   
+   - **실제로 없는 경우**: 
+     * 3단계 검증을 모두 시도했으나 찾지 못한 경우
+     * **반드시 빈 배열 []만 반환** (null이나 임의 데이터 금지)
+     * 수정사항에 "실효/해지 계약 섹션이 PDF에 없음" 명시
+   
+   - **찾았으나 정보 부족**: 
+     * 계약은 존재하나 해지일이나 해지사유가 누락된 경우
+     * 있는 정보만 채우고 누락된 필드는 null
+     * 수정사항에 "해지일 정보 누락" 등 명시
+   
+   - **확신 없음**: 
+     * 의심스러운 데이터는 **포함하지 말 것**
+     * 명확하지 않으면 빈 배열 [] 반환
    
    **⚠️ 절대 금지**:
-   - 보유 계약 리스트와 혼동 금지
-   - 임의로 데이터 생성 금지
-   - 1단계만 확인하고 포기하지 말 것
+   - ❌ 보유 계약 리스트와 혼동 금지
+   - ❌ 임의로 데이터 생성 금지 (해지일 만들어내기 금지)
+   - ❌ 1단계만 확인하고 포기하지 말 것
+   - ❌ null 값으로 채운 가짜 데이터 생성 금지
 
 
 5. **진단현황** ("님의 상품별 진단현황" 표)
