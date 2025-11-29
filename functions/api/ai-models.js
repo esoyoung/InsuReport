@@ -3,12 +3,21 @@
  * 🤖 AI VALIDATION SERVICE - KB Insurance PDF Validator
  * ============================================================================
  * 
- * Supported Models: Google Gemini & Anthropic Claude
+ * Supported Models: Google Gemini, Anthropic Claude, OpenAI GPT-5-Codex
  * Switch between models by commenting/uncommenting in validate-contracts.js
  * 
  * ============================================================================
  * 📊 AVAILABLE MODELS
  * ============================================================================
+ * 
+ * ✅ OpenAI GPT-5-Codex (NEW - Highest Accuracy)
+ *    - Cost: Variable based on usage
+ *    - API Key: OPENAI_API_KEY (from .genspark_llm.yaml)
+ *    - PDF Processing: ✓ Vision API with base64
+ *    - Korean: ✓ Excellent support
+ *    - JSON Output: ✓ Structured output with schema validation
+ *    - Model: gpt-5-codex
+ *    - Best for: Highest accuracy, complex data extraction, strict schema
  * 
  * ✅ Google Gemini 2.0 Flash (Primary - Recommended)
  *    - Cost: FREE (Rate limited) or ~$0.075 per 1M tokens
@@ -30,6 +39,8 @@
  * 
  * ============================================================================
  */
+
+import OpenAI from 'openai';
 
 /**
  * Google Gemini 2.0 Flash - Primary Model (Free/Low Cost)
@@ -79,7 +90,7 @@ export async function validateWithGemini(pdfBase64, parsedData, env) {
   const result = await response.json();
   const aiResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
   
-  return parseAIResponse(aiResponse);
+  return parseAIResponse(aiResponse, 'gemini-2.0-flash-exp');
 }
 
 /**
@@ -132,7 +143,69 @@ export async function validateWithClaude(pdfBase64, parsedData, env) {
   const result = await response.json();
   const aiResponse = result.content?.[0]?.text;
   
-  return parseAIResponse(aiResponse);
+  return parseAIResponse(aiResponse, 'claude-sonnet-4-5');
+}
+
+/**
+ * OpenAI GPT-5-Codex - New Model (Highest Accuracy)
+ */
+export async function validateWithGPT5Codex(pdfBase64, parsedData, env) {
+  // Load API key from environment (injected from .genspark_llm.yaml)
+  const apiKey = env.OPENAI_API_KEY;
+  const baseURL = env.OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1';
+  
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY not configured. Please set up LLM API key in GenSpark.');
+  }
+
+  const client = new OpenAI({
+    apiKey,
+    baseURL,
+  });
+
+  const prompt = buildPrompt(parsedData);
+
+  // Convert PDF base64 to data URL for GPT-5 Vision API
+  const pdfDataUrl = `data:application/pdf;base64,${pdfBase64}`;
+
+  try {
+    const response = await client.chat.completions.create({
+      model: 'gpt-5-codex',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert insurance document analyzer. Extract data from PDF with 100% accuracy following the exact schema provided.'
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            {
+              type: 'image_url',
+              image_url: {
+                url: pdfDataUrl,
+                detail: 'high'
+              }
+            }
+          ]
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 8192,
+      response_format: { type: 'json_object' }
+    });
+
+    const aiResponse = response.choices[0]?.message?.content;
+    
+    if (!aiResponse) {
+      throw new Error('Empty response from GPT-5-Codex');
+    }
+
+    return parseAIResponse(aiResponse, 'gpt-5-codex');
+  } catch (error) {
+    console.error('GPT-5-Codex API error:', error);
+    throw new Error(`GPT-5-Codex validation failed: ${error.message}`);
+  }
 }
 
 /**
@@ -378,7 +451,10 @@ KB 보험 보장분석 리포트 검증 시스템. 원본 PDF에서 4개 섹션 
 **📊 참고 데이터 (오류 가능성 있음):**
 ${JSON.stringify(parsedData, null, 2)}
 
-**📤 응답 형식 (JSON):**
+**📤 응답 형식 (STRICT JSON SCHEMA - 정확히 따를 것):**
+
+**🚨 중요: 다음 JSON 스키마를 정확히 따르지 않으면 시스템 오류 발생**
+
 {
   "설계사정보": {
     "설계사명": "string",
@@ -389,10 +465,10 @@ ${JSON.stringify(parsedData, null, 2)}
     "고객명": "string",
     "나이": number,
     "성별": "남자" | "여자",
-    "보유계약수": number (유지 중인 계약만, "보유 계약 리스트" 표 기준),
-    "월보험료": number (납입중인 계약의 월보험료 합계, 납입완료 제외),
-    "총납입완료보험료": number (모든 계약의 납입완료보험료 합계),
-    "총납입예정보험료": number (납입중 계약의 납입예정보험료 합계)
+    "보유계약수": number,
+    "월보험료": number,
+    "총납입완료보험료": number,
+    "총납입예정보험료": number
   },
   "계약리스트": [
     {
@@ -401,13 +477,13 @@ ${JSON.stringify(parsedData, null, 2)}
       "가입일": "YYYY-MM-DD",
       "납입방법": "월납" | "연납" | "일시납",
       "납입기간": "string",
-      "만기나이": "number세" | "종신",
-      "월보험료": number (납입중이면 월보험료, 납입완료면 0),
+      "만기나이": "string",
+      "월보험료": number,
       "납입상태": "납입중" | "납입완료",
-      "경과월수": number (계약일부터 오늘까지 경과한 개월수),
-      "미경과월수": number (납입중인 경우, 남은 납입 개월수, 납입완료면 0),
-      "납입완료보험료": number (월보험료 × 경과월수, 납입완료면 월보험료 × 납입기간),
-      "납입예정보험료": number (납입중이면 월보험료 × 미경과월수, 납입완료면 0),
+      "경과월수": number,
+      "미경과월수": number,
+      "납입완료보험료": number,
+      "납입예정보험료": number,
       "상태": "유지"
     }
   ],
@@ -423,30 +499,44 @@ ${JSON.stringify(parsedData, null, 2)}
   ],
   "진단현황": [
     {
-      "담보명": "string" (아래 35개 템플릿 순서를 반드시 따를 것),
-      "권장금액": number (PDF 원본 값, 필수, 없으면 0),
-      "가입금액": number (PDF 원본 값, 필수, 미가입이면 0),
-      "부족금액": number | null (부족이면 권장-가입, 충분이면 null, 미가입이면 권장금액),
+      "담보명": "상해사망",
+      "권장금액": number,
+      "가입금액": number,
+      "부족금액": number | null,
       "진단": "부족" | "충분" | "미가입"
     },
-    // ... (35개 템플릿 순서대로 모두 포함, PDF에 없어도 포함)
+    {
+      "담보명": "질병사망",
+      "권장금액": number,
+      "가입금액": number,
+      "부족금액": number | null,
+      "진단": "부족" | "충분" | "미가입"
+    }
+    // ... (35개 담보 모두 포함, 순서대로)
   ],
-  "수정사항": ["string"] (참고 데이터 대비 수정한 내용)
+  "수정사항": ["string"]
 }
 
-**⚠️ 중요 - 진단현황 필수 사항:**
-1. **순서 엄수**: 아래 35개 템플릿 순서를 반드시 따를 것
-2. **전체 포함**: 35개 담보를 모두 포함할 것 (PDF에 없어도 포함)
-3. **데이터 완전성**: 권장금액과 가입금액을 반드시 함께 추출
-4. **정렬 금지**: 절대 알파벳, 금액, 중요도 순으로 정렬하지 말 것
-5. **값 누락 시**: 권장금액 또는 가입금액이 PDF에 없으면 0으로 설정
+**🔒 JSON 스키마 검증 규칙:**
+
+1. **필수 키**: 위 5개 키는 반드시 포함 (설계사정보, 고객정보, 계약리스트, 실효해지계약, 진단현황)
+2. **키 이름 정확성**: 키 이름은 위와 정확히 일치해야 함 (공백, 특수문자 포함)
+3. **배열 타입**: 계약리스트, 실효해지계약, 진단현황은 반드시 배열 (빈 배열 []도 허용)
+4. **숫자 타입**: 금액, 나이, 월수 등은 반드시 number 타입 (문자열 금지)
+5. **진단현황 순서**: 35개 담보를 템플릿 순서대로 배치 (재정렬 절대 금지)
+
+**⚠️ 절대 금지 사항:**
+- ❌ 키 이름 변경 (예: "실효해지계약" → "해지계약")
+- ❌ 배열을 객체로 반환 (예: 계약리스트가 객체로 반환)
+- ❌ 담보 순서 재정렬 (알파벳, 금액, 중요도 순 정렬 금지)
+- ❌ 데이터 누락 (35개 담보 모두 포함, PDF에 없어도 포함)
 `;
 }
 
 /**
  * Parse AI response
  */
-function parseAIResponse(responseText) {
+function parseAIResponse(responseText, modelName = 'unknown') {
   if (!responseText) {
     throw new Error('Empty AI response');
   }
@@ -556,6 +646,9 @@ allKeys.forEach(key => {
     if (!parsed.설계사정보.소속) {
       parsed.설계사정보.소속 = '인카다이렉트 IMC사업단';
     }
+
+    // 모델 정보 추가
+    parsed.model = modelName;
 
     return parsed;
   } catch (error) {

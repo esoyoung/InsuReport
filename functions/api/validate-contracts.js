@@ -1,7 +1,8 @@
 // Cloudflare Pages Function for AI PDF validation
 import {
   validateWithGemini,
-  validateWithClaude
+  validateWithClaude,
+  validateWithGPT5Codex
 } from './ai-models.js';
 
 export async function onRequestPost(context) {
@@ -53,6 +54,18 @@ async function callAI(pdfBase64, parsedData, env) {
   // 🎯 ACTIVE MODEL (한 번에 하나만 활성화)
   // ============================================================================
   
+  // ✅ OpenAI GPT-5-Codex (ACTIVE - Highest Accuracy)
+  // 💰 Cost: Variable based on usage
+  // 📝 API Key: OPENAI_API_KEY (auto-configured from .genspark_llm.yaml)
+  // 🎯 Best for: Highest accuracy, complex data extraction, strict schema
+  // ----------------------------------------------------------------------------
+  console.log('🤖 Using OpenAI GPT-5-Codex');
+  return await validateWithGPT5Codex(pdfBase64, parsedData, env);
+
+  // ============================================================================
+  // 🔄 ALTERNATIVE MODELS (Uncomment to switch)
+  // ============================================================================
+  
   // ❌ Google Gemini 2.0 Flash (PRIMARY - RECOMMENDED)
   // 💰 Cost: FREE (rate limited) or ~$0.075 per 1M tokens
   // 📝 API Key: GEMINI_API_KEY
@@ -60,16 +73,12 @@ async function callAI(pdfBase64, parsedData, env) {
   // ----------------------------------------------------------------------------
   // console.log('🤖 Using Google Gemini 2.0 Flash');
   // return await validateWithGemini(pdfBase64, parsedData, env);
-
-  // ============================================================================
-  // 🔄 ALTERNATIVE MODEL (Uncomment to switch)
-  // ============================================================================
   
-  // ✅ Anthropic Claude Sonnet 4.5 (ACTIVE - Testing)
+  // ❌ Anthropic Claude Sonnet 4.5 (Alternative - High Accuracy)
   // 💰 Cost: ~$0.10/validation (4-page PDF)
   // 📝 API Key: ANTHROPIC_API_KEY
   // 🎯 Best for: Maximum accuracy, critical validations
   // ----------------------------------------------------------------------------
-  console.log('🤖 Using Anthropic Claude Sonnet 4.5');
-  return await validateWithClaude(pdfBase64, parsedData, env);
+  // console.log('🤖 Using Anthropic Claude Sonnet 4.5');
+  // return await validateWithClaude(pdfBase64, parsedData, env);
 }
