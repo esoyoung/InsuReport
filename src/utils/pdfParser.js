@@ -599,6 +599,12 @@ function parseTerminatedContracts(text) {
           if (KNOWN_COMPANY_MAP.has(candidate)) {
             회사명 = KNOWN_COMPANY_MAP.get(candidate);
             상품명 = tokens.slice(i + len).join(' ').trim();
+            
+            // 상품명이 비어있으면 회사명 제외한 전체를 상품명으로
+            if (!상품명) {
+              상품명 = cleanedForCompany.replace(candidate, '').trim();
+            }
+            
             companyFound = true;
             console.log(`  ✅ 회사명 발견: "${회사명}", 상품명="${상품명}"`);
             break;
@@ -611,6 +617,13 @@ function parseTerminatedContracts(text) {
       if (!companyFound && tokens.length > 0) {
         회사명 = tokens[0];
         상품명 = tokens.slice(1).join(' ').trim();
+        
+        // 상품명이 비어있으면 회사명만 있는 것이므로 전체를 상품명으로
+        if (!상품명) {
+          상품명 = 회사명;
+          회사명 = '';
+        }
+        
         console.log(`  ⚠️ 회사명 미발견, 첫 토큰 사용: 회사명="${회사명}", 상품명="${상품명}"`);
       } else if (!companyFound) {
         // 토큰이 하나도 없는 경우 전체를 상품명으로
