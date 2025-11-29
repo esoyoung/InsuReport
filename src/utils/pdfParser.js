@@ -366,19 +366,27 @@ export async function parsePDF(file) {
     const fullText = await extractTextWithCoordinates(pdf);
     
     // 각 섹션 파싱
+    const 설계사정보 = {}; // TODO: 설계사정보 파싱 구현 필요
     const 고객정보 = parseCustomerInfo(fullText);
     const 계약리스트 = parseContractList(fullText);
-    const 담보현황 = parseCoverageStatus(fullText);
+    const 실효해지계약 = []; // TODO: 실효/해지계약 파싱 구현 필요
     const 진단현황 = parseDiagnosisStatus(fullText);
     
     const result = {
+      설계사정보,
       고객정보,
       계약리스트,
-      담보현황,
+      실효해지계약,
       진단현황
     };
     
-    console.log('✅ 파싱 완료:', result);
+    console.log('✅ 파싱 완료 (설계사정보, 고객정보, 계약리스트, 실효해지계약, 진단현황):', {
+      설계사정보: Object.keys(설계사정보).length > 0 ? '있음' : '없음',
+      고객정보: 고객정보 ? '있음' : '없음',
+      계약리스트: 계약리스트?.length || 0,
+      실효해지계약: 실효해지계약?.length || 0,
+      진단현황: 진단현황?.length || 0
+    });
     
     return result;
     
