@@ -155,7 +155,7 @@ async function extractTextWithCoordinates(pdf) {
  */
 function parseAgentInfo(text) {
   const agentInfo = {
-    설계사명: '',
+    담당자명: '', // 설계사명 → 담당자명으로 변경
     소속: '인카다이렉트 IMC사업단', // 고정값
     전화번호: '',
     이메일: '',
@@ -185,7 +185,7 @@ function parseAgentInfo(text) {
   }
   
   if (nameMatch) {
-    agentInfo.설계사명 = nameMatch[1].trim();
+    agentInfo.담당자명 = nameMatch[1].trim();
   }
   
   // 전화번호 추출 (010-XXXX-XXXX 형식)
@@ -212,11 +212,11 @@ function parseAgentInfo(text) {
     }
   }
   
-  console.log('👔 설계사 정보:', agentInfo);
+  console.log('👔 담당자 정보:', agentInfo);
   
   // 최소한 담당자명이 있어야 유효한 데이터로 간주
-  if (!agentInfo.설계사명) {
-    console.warn('⚠️ 설계사명을 찾을 수 없습니다 (표지 정보 부족)');
+  if (!agentInfo.담당자명) {
+    console.warn('⚠️ 담당자명을 찾을 수 없습니다 (표지 정보 부족)');
     return {}; // 빈 객체 반환 (AI가 채울 수 있도록)
   }
   
@@ -369,7 +369,7 @@ function parseContractList(text) {
 
     contracts.push({
       번호: Number(rowNumber),
-      보험사: company || '',
+      회사명: company || '', // 보험사 → 회사명으로 변경
       상품명: product || '',
       계약일: date,
       가입일: date,
@@ -488,10 +488,16 @@ function parseTerminatedContracts(text) {
     const 가입일 = dateMatch[1];
     const dateIndex = normalizedRow.indexOf(가입일);
     
-    // 날짜 이전: 보험사 + 상품명
+    // 날짜 이전: 회사명 + 상품명
     const beforeDate = normalizedRow.slice(0, dateIndex).trim();
     const beforeTokens = beforeDate.split(' ').filter(Boolean);
-    const { company: 보험사, product: 상품명 } = extractCompanyAndProduct(beforeTokens);
+    const { company: 회사명Raw, product: 상품명Raw } = extractCompanyAndProduct(beforeTokens);
+    
+    // 상품명에서 "해지*" 또는 "실효*" 접두사 제거
+    const 상품명 = 상품명Raw.replace(/^(해지|실효)\*?\s*/, '').trim();
+    
+    // 회사명이 비어있으면 전체 beforeDate를 회사명으로 간주 (새마을중앙회 등)
+    const 회사명 = 회사명Raw || (beforeTokens.length === 1 ? beforeTokens[0] : '');
     
     // 날짜 이후: 납입주기, 납입기간, 만기, 월보험료, 상태, 해지사유
     const afterDate = normalizedRow.slice(dateIndex + 가입일.length).trim();
@@ -513,19 +519,20 @@ function parseTerminatedContracts(text) {
     const premiumMatch = afterDate.match(/([\d,]+)\s*원?/);
     const 월보험료 = premiumMatch ? sanitizeNumber(premiumMatch[1]) : 0;
     
-    if (!보험사 && !상품명) {
+    if (!회사명 && !상품명) {
       continue; // 유효하지 않은 데이터 스킵
     }
     
     contracts.push({
-      보험사: 보험사 || '',
+      번호: Number(rowNumber),
+      상태,           // 번호 다음 상태 (해지/실효)
+      회사명: 회사명 || '', // 보험사 → 회사명으로 변경
       상품명: 상품명 || '',
       가입일,
       납입방법: 납입주기,
       납입기간,
       만기나이: 만기,
-      월보험료,
-      상태
+      월보험료
     });
   }
   
@@ -535,7 +542,7 @@ function parseTerminatedContracts(text) {
   if (contracts.length > 0) {
     console.log('  실효/해지 계약 목록:');
     contracts.forEach((c, idx) => {
-      console.log(`  ${idx + 1}. ${c.보험사} - ${c.상품명} (${c.상태})`);
+      console.log(`  ${c.번호}. [${c.상태}] ${c.회사명} - ${c.상품명}`);
     });
   }
   
