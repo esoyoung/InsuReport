@@ -305,19 +305,146 @@ function parseCoverageStatus(text) {
 }
 
 // 담보별 진단현황 파싱
+/**
+ * 실효/해지 계약 파싱
+ * "님의 실효/해지 계약 현황" 섹션에서 데이터 추출
+ */
+function parseTerminatedContracts(text) {
+  const contracts = [];
+  
+  // ============================================================================
+  // 🔍 실효/해지 계약 섹션 감지 (다양한 키워드 지원)
+  // ============================================================================
+  const sectionKeywords = [
+    /님의\s*실효\s*\/?\s*해지\s*계약\s*현황/i,
+    /실효\s*·?\s*해지\s*계약/i,
+    /해지\s*계약\s*현황/i,
+    /종료된\s*계약/i
+  ];
+  
+  let sectionMatch = null;
+  for (const keyword of sectionKeywords) {
+    const match = text.match(keyword);
+    if (match) {
+      sectionMatch = match;
+      break;
+    }
+  }
+  
+  if (!sectionMatch) {
+    console.log('ℹ️ 실효/해지 계약 섹션 없음 (정상 - 해지 계약이 없는 경우)');
+    return [];
+  }
+  
+  // 섹션 시작 위치 찾기
+  const sectionStartIndex = text.indexOf(sectionMatch[0]);
+  const sectionText = text.slice(sectionStartIndex);
+  
+  // 다음 주요 섹션 전까지만 추출 (진단 현황, 상세 페이지 등)
+  const nextSectionMatch = sectionText.match(/님의\s*전체\s*담보\s*진단\s*현황|님의\s*상품별|보험료\s*납입\s*현황/i);
+  const endIndex = nextSectionMatch ? sectionText.indexOf(nextSectionMatch[0]) : sectionText.length;
+  const targetText = sectionText.slice(0, endIndex);
+  
+  // ============================================================================
+  // 📋 계약 데이터 추출 (정규식 패턴)
+  // ============================================================================
+  // 패턴: 보험사 상품명 계약일 납입주기 납입기간 만기 월보험료 상태
+  // 예: "삼성화재 암보험 2010-10-01 월납 10년 80세 50,000원 해지"
+  const contractPattern = /([\w가-힣\s()]+?)\s+(\d{4}-\d{2}-\d{2})\s+(월납|연납|일시납|전기납)\s+([\d]+년|종신|[\d]+세)\s+([\d]+세|종신)\s+([\d,]+)\s*원?\s*(해지|실효)/g;
+  
+  let match;
+  while ((match = contractPattern.exec(targetText)) !== null) {
+    const fullMatch = match[0];
+    const beforeDate = match[1].trim();
+    const 가입일 = match[2];
+    const 납입주기 = match[3];
+    const 납입기간 = match[4];
+    const 만기 = match[5];
+    const 월보험료 = sanitizeNumber(match[6]);
+    const 상태 = match[7];
+    
+    // 보험사와 상품명 분리
+    const tokens = beforeDate.split(/\s+/).filter(Boolean);
+    const { company: 보험사, product: 상품명 } = extractCompanyAndProduct(tokens);
+    
+    if (!보험사 && !상품명) {
+      continue; // 유효하지 않은 데이터 스킵
+    }
+    
+    contracts.push({
+      보험사: 보험사 || '',
+      상품명: 상품명 || '',
+      가입일,
+      납입방법: 납입주기,
+      납입기간,
+      만기나이: 만기,
+      월보험료,
+      상태
+    });
+  }
+  
+  console.log(`📊 실효/해지 계약: ${contracts.length}건 추출`);
+  
+  return contracts;
+}
+
 function parseDiagnosisStatus(text) {
   const diagnoses = [];
   
+  // ============================================================================
+  // 🎯 35개 필수 담보 템플릿 (AI 프롬프트와 100% 일치)
+  // ============================================================================
+  // ⚠️ 중요: 이 순서와 명칭은 ai-models.js의 프롬프트와 정확히 일치해야 함
+  // 변경 시 ai-models.js도 함께 수정 필요
+  // ============================================================================
   const damboItems = [
-    '상해사망', '질병사망', '장기요양간병비', '간병인/간호간병질병일당',
-    '일반암', '유사암', '고액암', '고액(표적)항암치료비',
-    '뇌혈관질환', '뇌졸중', '뇌출혈', '허혈성심장질환', '급성심근경색증',
-    '상해입원의료비', '상해통원의료비', '질병입원의료비', '질병통원의료비',
-    '3대비급여실손', '상해수술비', '질병수술비', '암수술비',
-    '뇌혈관질환수술비', '허혈성심장질환수술비',
-    '상해입원일당', '질병입원일당', '벌금(대인/스쿨존/대물)',
-    '교통사고처리지원금', '변호사선임비용', '골절진단비',
-    '보철치료비', '가족/일상/자녀배상', '화재벌금'
+    // [사망장해/치매간병] (8개)
+    '상해사망',
+    '질병사망',
+    '상해80%미만후유장해',
+    '질병80%미만후유장해',
+    '장기요양간병비',
+    '경증치매진단',
+    '간병인/간호간병상해일당',
+    '간병인/간호간병질병일당',
+    
+    // [3대질병(암/뇌/심장) 진단] (10개)
+    '일반암',
+    '유사암',
+    '고액암',
+    '고액(표적)항암치료비',
+    '뇌혈관질환',
+    '뇌졸중',
+    '뇌출혈',
+    '허혈성심장질환',
+    '급성심근경색증',
+    '심근경색증',
+    
+    // [의료비] (5개)
+    '상해입원의료비',
+    '상해통원의료비',
+    '질병입원의료비',
+    '질병통원의료비',
+    '3대비급여실손',
+    
+    // [수술비] (5개)
+    '상해수술비',
+    '질병수술비',
+    '암수술비',
+    '뇌혈관질환수술비',
+    '허혈성심장질환수술비',
+    
+    // [입원/일상/상해] (4개)
+    '상해입원일당',
+    '질병입원일당',
+    '골절진단비',
+    '보철치료비',
+    
+    // [배상책임/벌금] (3개)
+    '가족/일상/자녀배상',
+    '벌금(대인/스쿨존/대물)',
+    '교통사고처리지원금'
+    // ⚠️ 총 35개 항목 (AI 프롬프트와 일치)
   ];
   
   // "님의 전체 담보 진단 현황" 섹션 찾기
@@ -369,7 +496,7 @@ export async function parsePDF(file) {
     const 설계사정보 = {}; // TODO: 설계사정보 파싱 구현 필요
     const 고객정보 = parseCustomerInfo(fullText);
     const 계약리스트 = parseContractList(fullText);
-    const 실효해지계약 = []; // TODO: 실효/해지계약 파싱 구현 필요
+    const 실효해지계약 = parseTerminatedContracts(fullText); // ✅ 실효/해지계약 파싱 구현
     const 진단현황 = parseDiagnosisStatus(fullText);
     
     const result = {
