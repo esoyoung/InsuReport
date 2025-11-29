@@ -49,11 +49,11 @@ function ReportViewer() {
       <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-extrabold text-gray-900 leading-tight">
-            {고객정보.이름}님의 보장분석 리포트
+            {고객정보.고객명 || 고객정보.이름}님의 보장분석 리포트
           </h1>
           <div className="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-2 text-sm text-gray-600">
             <div className="flex items-baseline gap-2 text-lg font-semibold text-gray-900">
-              <span>{고객정보.이름}님</span>
+              <span>{고객정보.고객명 || 고객정보.이름}님</span>
               {ageGenderLabel ? (
                 <span className="text-xs font-medium text-gray-500 leading-none">({ageGenderLabel})</span>
               ) : null}
