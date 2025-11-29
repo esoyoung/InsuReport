@@ -408,6 +408,16 @@ function parseCoverageStatus(text) {
  * 실효/해지 계약 파싱
  * "님의 실효/해지 계약 현황" 섹션에서 데이터 추출
  */
+/**
+ * 실효/해지 계약 파싱 (재설계 버전)
+ * "실효/해지 계약 현황" 섹션 추출
+ * 
+ * 개선사항:
+ * ✅ 2줄짜리 상품명 지원 (줄바꿈 병합)
+ * ✅ 회사명 추출 개선 (KNOWN_COMPANY_MAP 활용)
+ * ✅ 월보험료 정확 추출 (마지막 4자리 이상 숫자)
+ * ✅ 상태(해지/실효) 일반 텍스트로 표시
+ */
 function parseTerminatedContracts(text) {
   const contracts = [];
   
@@ -445,88 +455,139 @@ function parseTerminatedContracts(text) {
   const targetText = sectionText.slice(0, endIndex);
   
   // ============================================================================
-  // 📋 계약 데이터 추출 (테이블 형식 파싱)
+  // 📋 2줄짜리 행 병합 로직 (핵심 개선)
   // ============================================================================
-  // 테이블 구조:
-  // 번호  보험사  상품명  계약일  납입주기  납입기간  만기  월보험료  상태  해지사유
-  // 1     삼성화재 암보험  2010-10-01  월납  10년  80세  50,000  해지  만기
-  
-  // 방법 1: 보유 계약 리스트와 유사한 행 단위 파싱
-  const sectionLines = targetText
+  let lines = targetText
     .split('\n')
     .map(line => line.trim())
     .filter(line => line);
   
   // 헤더 행 제거
-  const filteredLines = sectionLines.filter(line => {
+  lines = lines.filter(line => {
     if (!line) return false;
-    if (/^번호\s+보험사/.test(line)) return false;
-    if (/^상태\s+보험사/.test(line)) return false;
+    if (/^번호\s+(회사명|보험사)/.test(line)) return false;
+    if (/^상태\s+(회사명|보험사)/.test(line)) return false;
     if (/^단위/.test(line)) return false;
     if (/^합계/.test(line)) return false;
     return true;
   });
   
-  const cleanedSection = filteredLines.join('\n');
-  
-  // 행 단위 정규식: 번호로 시작하는 행
-  const rowRegex = /(\d+)\s+([\s\S]*?)(?=(?:\n\d+\s+)|$)/g;
-  let match;
-  
-  while ((match = rowRegex.exec(cleanedSection)) !== null) {
-    const rowNumber = match[1];
-    const rowBody = match[2].trim();
-    if (!rowBody) continue;
+  // 번호로 시작하지 않는 줄은 이전 줄과 병합 (2줄짜리 상품명 처리)
+  const mergedLines = [];
+  for (let i = 0; i < lines.length; i++) {
+    const currentLine = lines[i];
     
-    // 행 데이터 정규화
-    const normalizedRow = rowBody.replace(/\s+/g, ' ').trim();
+    // 번호로 시작하면 새로운 행
+    if (/^\d+\s+/.test(currentLine)) {
+      mergedLines.push(currentLine);
+    } else {
+      // 번호가 없으면 이전 행에 병합
+      if (mergedLines.length > 0) {
+        mergedLines[mergedLines.length - 1] += ' ' + currentLine;
+      }
+    }
+  }
+  
+  console.log(`📋 실효/해지 계약: ${mergedLines.length}개 행 감지 (2줄 병합 완료)`);
+  
+  // ============================================================================
+  // 각 행 파싱
+  // ============================================================================
+  for (const line of mergedLines) {
+    const normalizedLine = line.replace(/\s+/g, ' ').trim();
     
-    // 날짜 찾기 (YYYY-MM-DD)
-    const dateMatch = normalizedRow.match(/(\d{4}-\d{2}-\d{2})/);
-    if (!dateMatch) continue;
+    // 번호 추출
+    const numberMatch = normalizedLine.match(/^(\d+)\s+/);
+    if (!numberMatch) continue;
+    
+    const 번호 = Number(numberMatch[1]);
+    const restText = normalizedLine.slice(numberMatch[0].length).trim();
+    
+    // ============================================================================
+    // 날짜 기준으로 분할 (YYYY-MM-DD)
+    // ============================================================================
+    const dateMatch = restText.match(/(\d{4}-\d{2}-\d{2})/);
+    if (!dateMatch) {
+      console.warn(`  ⚠️ ${번호}번 행: 가입일 없음, 스킵`);
+      continue;
+    }
     
     const 가입일 = dateMatch[1];
-    const dateIndex = normalizedRow.indexOf(가입일);
+    const dateIndex = restText.indexOf(가입일);
+    const beforeDate = restText.slice(0, dateIndex).trim();
+    const afterDate = restText.slice(dateIndex + 가입일.length).trim();
     
-    // 날짜 이전: 회사명 + 상품명
-    const beforeDate = normalizedRow.slice(0, dateIndex).trim();
+    // ============================================================================
+    // 날짜 이전: 회사명 + 상품명 추출
+    // ============================================================================
     const beforeTokens = beforeDate.split(' ').filter(Boolean);
-    const { company: 회사명Raw, product: 상품명Raw } = extractCompanyAndProduct(beforeTokens);
+    
+    let 회사명 = '';
+    let 상품명 = '';
+    
+    // 회사명 찾기 (KNOWN_COMPANY_MAP 활용)
+    let companyFound = false;
+    for (let i = 0; i < beforeTokens.length; i++) {
+      // 1-3개 토큰 윈도우로 회사명 검색
+      for (let len = Math.min(3, beforeTokens.length - i); len >= 1; len--) {
+        const candidateTokens = beforeTokens.slice(i, i + len);
+        const normalized = candidateTokens.join('').replace(/\s+/g, '');
+        
+        if (KNOWN_COMPANY_MAP.has(normalized)) {
+          회사명 = KNOWN_COMPANY_MAP.get(normalized);
+          // 회사명 이후가 상품명
+          상품명 = beforeTokens.slice(i + len).join(' ').trim();
+          companyFound = true;
+          break;
+        }
+      }
+      if (companyFound) break;
+    }
+    
+    // 회사명을 찾지 못한 경우: 첫 토큰을 회사명으로, 나머지를 상품명으로
+    if (!companyFound && beforeTokens.length > 0) {
+      회사명 = beforeTokens[0];
+      상품명 = beforeTokens.slice(1).join(' ').trim();
+    }
     
     // 상품명에서 "해지*" 또는 "실효*" 접두사 제거
-    const 상품명 = 상품명Raw.replace(/^(해지|실효)\*?\s*/, '').trim();
+    상품명 = 상품명.replace(/^(해지|실효)\*?\s*/, '').trim();
     
-    // 회사명이 비어있으면 전체 beforeDate를 회사명으로 간주 (새마을중앙회 등)
-    const 회사명 = 회사명Raw || (beforeTokens.length === 1 ? beforeTokens[0] : '');
-    
-    // 날짜 이후: 납입주기, 납입기간, 만기, 월보험료, 상태, 해지사유
-    const afterDate = normalizedRow.slice(dateIndex + 가입일.length).trim();
+    // ============================================================================
+    // 날짜 이후: 납입주기, 납입기간, 만기, 상태, 월보험료 추출
+    // ============================================================================
     const afterTokens = afterDate.split(' ').filter(Boolean);
     
-    // 상태 찾기 (해지 또는 실효)
+    // 상태 찾기 (해지 또는 실효) - 일반 텍스트로 표시
     const 상태 = afterTokens.find(token => /^(해지|실효)$/.test(token)) || '해지';
     
     // 납입주기 찾기
     const 납입주기 = afterTokens.find(token => /(월납|연납|일시납|전기납)/.test(token)) || '-';
     
-    // 납입기간 찾기
-    const 납입기간 = afterTokens.find(token => /([\d]+년|종신)/.test(token)) || '-';
+    // 납입기간 찾기 (N년 또는 종신)
+    const 납입기간 = afterTokens.find(token => /^\d+년$|^종신$/.test(token)) || '-';
     
-    // 만기 찾기
-    const 만기 = afterTokens.find(token => /([\d]+세|종신)/.test(token) && !token.includes('년')) || '-';
+    // 만기 찾기 (N세 또는 종신, 단 "년"이 없는 것)
+    const 만기 = afterTokens.find(token => /^\d+세$|^종신$/.test(token)) || '-';
     
-    // 월보험료 찾기 (숫자 + 쉼표)
-    const premiumMatch = afterDate.match(/([\d,]+)\s*원?/);
-    const 월보험료 = premiumMatch ? sanitizeNumber(premiumMatch[1]) : 0;
+    // 월보험료 찾기: 쉼표가 포함된 4자리 이상 숫자 (가장 마지막 것)
+    const premiumMatches = [...afterDate.matchAll(/([\d,]{4,})\s*원?/g)];
+    const 월보험료 = premiumMatches.length > 0 
+      ? sanitizeNumber(premiumMatches[premiumMatches.length - 1][1])
+      : 0;
     
+    // ============================================================================
+    // 유효성 검증
+    // ============================================================================
     if (!회사명 && !상품명) {
-      continue; // 유효하지 않은 데이터 스킵
+      console.warn(`  ⚠️ ${번호}번 행: 회사명/상품명 없음, 스킵`);
+      continue;
     }
     
     contracts.push({
-      번호: Number(rowNumber),
-      상태,           // 번호 다음 상태 (해지/실효)
-      회사명: 회사명 || '', // 보험사 → 회사명으로 변경
+      번호,
+      상태,           // 해지 또는 실효 (일반 텍스트)
+      회사명: 회사명 || '',
       상품명: 상품명 || '',
       가입일,
       납입방법: 납입주기,
@@ -536,13 +597,13 @@ function parseTerminatedContracts(text) {
     });
   }
   
-  console.log(`📊 실효/해지 계약: ${contracts.length}건 추출`);
+  console.log(`📊 실효/해지 계약: ${contracts.length}건 추출 완료`);
   
   // 디버그: 추출된 계약 정보 출력
   if (contracts.length > 0) {
-    console.log('  실효/해지 계약 목록:');
-    contracts.forEach((c, idx) => {
-      console.log(`  ${c.번호}. [${c.상태}] ${c.회사명} - ${c.상품명}`);
+    console.log('  📋 실효/해지 계약 목록:');
+    contracts.forEach((c) => {
+      console.log(`    ${c.번호}. [${c.상태}] ${c.회사명} - ${c.상품명} (${c.월보험료.toLocaleString()}원)`);
     });
   }
   
