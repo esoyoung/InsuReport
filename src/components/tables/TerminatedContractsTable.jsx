@@ -107,7 +107,7 @@ export default function TerminatedContractsTable({ data }) {
                 상태
               </th>
               <th scope="col" className="px-1 py-2 text-left text-primary-700 font-semibold align-middle" style={{ width: '6rem' }}>
-                보험사
+                회사명
               </th>
               <th scope="col" className="px-1 py-2 text-left text-primary-700 font-semibold align-middle" style={{ minWidth: '20rem' }}>
                 상품명
@@ -176,10 +176,8 @@ export default function TerminatedContractsTable({ data }) {
 
               return (
                 <tr key={`terminated-${index}`} className="hover:bg-gray-50 align-middle">
-                  <td className="px-1 py-2 text-gray-700 align-middle">
-                    <span className="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold bg-rose-100 text-rose-700 border border-rose-300">
-                      {status}
-                    </span>
+                  <td className="px-1 py-2 text-gray-700 align-middle text-center">
+                    {status}
                   </td>
                   <td className="px-1 py-2 text-gray-700 align-middle">
                     {renderCellContent(companyLines, { align: 'left' })}
