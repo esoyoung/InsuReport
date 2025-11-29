@@ -577,14 +577,19 @@ function parseTerminatedContracts(text) {
     
     // Step 2: 회사명 패턴 탐지
     // "無MG웃는얼굴..." → "MG손해보험" + "웃는얼굴..."
-    const mgMatch = cleaned.match(/^(無|무|\(무\))?\s*MG\s*(.+)/i);
+    // 공백 제거 후 MG 패턴 확인 (無MG, 무MG, (무)MG 등 모두 처리)
+    const mgMatch = cleaned.match(/^(無|무|\(무\))?MG(.+)/i);
     if (mgMatch) {
       회사명 = 'MG손해보험';
       상품명 = mgMatch[2].trim();
       console.log(`  ✅ MG 패턴 감지: 회사명="${회사명}", 상품명="${상품명}"`);
     } else {
       // 일반 회사명 찾기
-      const tokens = cleaned.split(/\s+/).filter(Boolean);
+      // Step 2-1: 無 접두사 제거
+      let cleanedForCompany = cleaned.replace(/^(無|무|\(무\))/g, '').trim();
+      console.log(`  無 제거 후: "${cleanedForCompany}"`);
+      
+      const tokens = cleanedForCompany.split(/\s+/).filter(Boolean);
       
       let companyFound = false;
       for (let i = 0; i < tokens.length; i++) {
@@ -604,9 +609,13 @@ function parseTerminatedContracts(text) {
       
       // 회사명을 찾지 못한 경우
       if (!companyFound && tokens.length > 0) {
-        회사명 = tokens[0].replace(/^(無|무|\(무\))/, '');
+        회사명 = tokens[0];
         상품명 = tokens.slice(1).join(' ').trim();
         console.log(`  ⚠️ 회사명 미발견, 첫 토큰 사용: 회사명="${회사명}", 상품명="${상품명}"`);
+      } else if (!companyFound) {
+        // 토큰이 하나도 없는 경우 전체를 상품명으로
+        상품명 = cleanedForCompany;
+        console.log(`  ⚠️ 토큰 없음, 전체를 상품명으로: 상품명="${상품명}"`);
       }
     }
     
