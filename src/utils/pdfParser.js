@@ -149,6 +149,80 @@ async function extractTextWithCoordinates(pdf) {
   return allText.join('\n');
 }
 
+/**
+ * 설계사 정보 파싱 (1페이지 표지)
+ * 담당 컨설턴트 정보 추출: 담당자명, 소속, 연락처, 이메일, 분석일자
+ */
+function parseAgentInfo(text) {
+  const agentInfo = {
+    설계사명: '',
+    소속: '인카다이렉트 IMC사업단', // 고정값
+    전화번호: '',
+    이메일: '',
+    분석일자: ''
+  };
+  
+  // ============================================================================
+  // 1페이지 표지에서 담당 컨설턴트 정보 추출
+  // ============================================================================
+  
+  // 1페이지만 추출 (첫 번째 PAGE_BREAK 전까지)
+  const firstPageMatch = text.match(/^([\s\S]*?)--- PAGE_BREAK ---/);
+  const firstPageText = firstPageMatch ? firstPageMatch[1] : text;
+  
+  // 담당자명 추출 (다양한 패턴)
+  // 패턴 1: "담당 컨설턴트 홍길동" 또는 "담당자 홍길동"
+  let nameMatch = firstPageText.match(/담당\s*(?:컨설턴트|자|설계사)[\s:]*([가-힣]{2,4})/);
+  
+  // 패턴 2: "컨설턴트: 홍길동" 또는 "설계사: 홍길동"
+  if (!nameMatch) {
+    nameMatch = firstPageText.match(/(?:컨설턴트|설계사)[\s:]+([가-힣]{2,4})/);
+  }
+  
+  // 패턴 3: 표지 하단에 이름만 있는 경우 (전화번호 바로 위)
+  if (!nameMatch) {
+    nameMatch = firstPageText.match(/([가-힣]{2,4})\s*\n\s*010[-\s]?\d{4}[-\s]?\d{4}/);
+  }
+  
+  if (nameMatch) {
+    agentInfo.설계사명 = nameMatch[1].trim();
+  }
+  
+  // 전화번호 추출 (010-XXXX-XXXX 형식)
+  const phoneMatch = firstPageText.match(/010[-\s]?(\d{4})[-\s]?(\d{4})/);
+  if (phoneMatch) {
+    agentInfo.전화번호 = `010-${phoneMatch[1]}-${phoneMatch[2]}`;
+  }
+  
+  // 이메일 추출
+  const emailMatch = firstPageText.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,})/);
+  if (emailMatch) {
+    agentInfo.이메일 = emailMatch[1];
+  }
+  
+  // 분석일자 추출 (YYYY-MM-DD 또는 YYYY.MM.DD 형식)
+  const dateMatch = firstPageText.match(/분석일자[\s:]*(\d{4})[-.\s]?(\d{2})[-.\s]?(\d{2})/);
+  if (dateMatch) {
+    agentInfo.분석일자 = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+  } else {
+    // 분석일자 명시 없이 날짜만 있는 경우
+    const simpleDateMatch = firstPageText.match(/(\d{4})[-.](\d{2})[-.](\d{2})/);
+    if (simpleDateMatch) {
+      agentInfo.분석일자 = `${simpleDateMatch[1]}-${simpleDateMatch[2]}-${simpleDateMatch[3]}`;
+    }
+  }
+  
+  console.log('👔 설계사 정보:', agentInfo);
+  
+  // 최소한 담당자명이 있어야 유효한 데이터로 간주
+  if (!agentInfo.설계사명) {
+    console.warn('⚠️ 설계사명을 찾을 수 없습니다 (표지 정보 부족)');
+    return {}; // 빈 객체 반환 (AI가 채울 수 있도록)
+  }
+  
+  return agentInfo;
+}
+
 // 고객 정보 파싱
 function parseCustomerInfo(text) {
   // "안영균 (61세 ,남자) 님의 전체 보장현황" 또는 "전체 계약리스트" 패턴
@@ -493,7 +567,7 @@ export async function parsePDF(file) {
     const fullText = await extractTextWithCoordinates(pdf);
     
     // 각 섹션 파싱
-    const 설계사정보 = {}; // TODO: 설계사정보 파싱 구현 필요
+    const 설계사정보 = parseAgentInfo(fullText); // ✅ 설계사정보 파싱 구현 (1페이지 표지)
     const 고객정보 = parseCustomerInfo(fullText);
     const 계약리스트 = parseContractList(fullText);
     const 실효해지계약 = parseTerminatedContracts(fullText); // ✅ 실효/해지계약 파싱 구현
