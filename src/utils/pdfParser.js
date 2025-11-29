@@ -507,17 +507,25 @@ function parseTerminatedContracts(text) {
   console.log(`📋 실효/해지 계약: ${mergedLines.length}개 행 감지 (2줄 병합 완료)`);
   
   // ============================================================================
-  // 각 행 파싱
+  // 각 행 파싱 (완전 재설계)
   // ============================================================================
   for (const line of mergedLines) {
     const normalizedLine = line.replace(/\s+/g, ' ').trim();
     
+    console.log(`\n🔍 원본 행: ${normalizedLine.substring(0, 100)}...`);
+    
     // 번호 추출
     const numberMatch = normalizedLine.match(/^(\d+)\s+/);
-    if (!numberMatch) continue;
+    if (!numberMatch) {
+      console.warn(`  ⚠️ 번호 없음, 스킵`);
+      continue;
+    }
     
     const 번호 = Number(numberMatch[1]);
     const restText = normalizedLine.slice(numberMatch[0].length).trim();
+    
+    console.log(`  번호: ${번호}`);
+    console.log(`  나머지: ${restText.substring(0, 80)}...`);
     
     // ============================================================================
     // 날짜 기준으로 분할 (YYYY-MM-DD)
@@ -533,57 +541,56 @@ function parseTerminatedContracts(text) {
     const beforeDate = restText.slice(0, dateIndex).trim();
     const afterDate = restText.slice(dateIndex + 가입일.length).trim();
     
+    console.log(`  날짜 이전: "${beforeDate}"`);
+    console.log(`  날짜 이후: "${afterDate}"`);
+    
     // ============================================================================
-    // 날짜 이전: 회사명 + 상품명 추출
+    // 날짜 이전: 회사명 + 상품명 추출 (완전 재설계)
     // ============================================================================
-    // Step 1: "해지*" 또는 "실효*" 패턴 완전 제거
-    let cleanedBeforeDate = beforeDate
-      .replace(/해지\*/g, '')
-      .replace(/실효\*/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    // Step 2: "無" 접두사 제거 (無MG → MG)
-    cleanedBeforeDate = cleanedBeforeDate.replace(/(無|무|\(무\))/g, '');
-    
-    const beforeTokens = cleanedBeforeDate.split(' ').filter(Boolean);
-    
     let 회사명 = '';
     let 상품명 = '';
     
-    if (beforeTokens.length === 0) {
-      console.warn(`  ⚠️ ${번호}번 행: 회사명/상품명 추출 불가`);
-      continue;
-    }
+    // Step 1: 상태 제거 (해지*, 실효*)
+    let cleaned = beforeDate
+      .replace(/해지\*/g, '')
+      .replace(/실효\*/g, '')
+      .trim();
     
-    // 회사명 찾기 (KNOWN_COMPANY_MAP 활용)
-    let companyFound = false;
-    for (let i = 0; i < beforeTokens.length; i++) {
-      // 1-3개 토큰 윈도우로 회사명 검색
-      for (let len = Math.min(3, beforeTokens.length - i); len >= 1; len--) {
-        const candidateTokens = beforeTokens.slice(i, i + len);
-        const normalized = candidateTokens.join('').replace(/\s+/g, '');
-        
-        if (KNOWN_COMPANY_MAP.has(normalized)) {
-          회사명 = KNOWN_COMPANY_MAP.get(normalized);
-          // 회사명 이후가 상품명
-          상품명 = beforeTokens.slice(i + len).join(' ').trim();
-          companyFound = true;
-          break;
+    console.log(`  상태 제거 후: "${cleaned}"`);
+    
+    // Step 2: 회사명 패턴 탐지
+    // "無MG웃는얼굴..." → "MG손해보험" + "웃는얼굴..."
+    const mgMatch = cleaned.match(/^(無|무|\(무\))?\s*MG\s*(.+)/i);
+    if (mgMatch) {
+      회사명 = 'MG손해보험';
+      상품명 = mgMatch[2].trim();
+      console.log(`  ✅ MG 패턴 감지: 회사명="${회사명}", 상품명="${상품명}"`);
+    } else {
+      // 일반 회사명 찾기
+      const tokens = cleaned.split(/\s+/).filter(Boolean);
+      
+      let companyFound = false;
+      for (let i = 0; i < tokens.length; i++) {
+        for (let len = Math.min(3, tokens.length - i); len >= 1; len--) {
+          const candidate = tokens.slice(i, i + len).join('').replace(/\s+/g, '');
+          
+          if (KNOWN_COMPANY_MAP.has(candidate)) {
+            회사명 = KNOWN_COMPANY_MAP.get(candidate);
+            상품명 = tokens.slice(i + len).join(' ').trim();
+            companyFound = true;
+            console.log(`  ✅ 회사명 발견: "${회사명}", 상품명="${상품명}"`);
+            break;
+          }
         }
+        if (companyFound) break;
       }
-      if (companyFound) break;
-    }
-    
-    // 회사명을 찾지 못한 경우: 첫 토큰을 회사명으로
-    if (!companyFound && beforeTokens.length > 0) {
-      회사명 = beforeTokens[0];
-      상품명 = beforeTokens.slice(1).join(' ').trim();
-    }
-    
-    // 상품명이 비어있으면 전체를 상품명으로
-    if (!상품명 && beforeTokens.length > 0) {
-      상품명 = beforeTokens.join(' ').trim();
+      
+      // 회사명을 찾지 못한 경우
+      if (!companyFound && tokens.length > 0) {
+        회사명 = tokens[0].replace(/^(無|무|\(무\))/, '');
+        상품명 = tokens.slice(1).join(' ').trim();
+        console.log(`  ⚠️ 회사명 미발견, 첫 토큰 사용: 회사명="${회사명}", 상품명="${상품명}"`);
+      }
     }
     
     // ============================================================================
@@ -591,7 +598,9 @@ function parseTerminatedContracts(text) {
     // ============================================================================
     const afterTokens = afterDate.split(' ').filter(Boolean);
     
-    // 상태 찾기 (해지 또는 실효) - 일반 텍스트로 표시
+    console.log(`  날짜 이후 토큰: [${afterTokens.slice(0, 10).join(', ')}]`);
+    
+    // 상태 찾기 (해지 또는 실효)
     const 상태 = afterTokens.find(token => /^(해지|실효)$/.test(token)) || '해지';
     
     // 납입주기 찾기
@@ -600,14 +609,16 @@ function parseTerminatedContracts(text) {
     // 납입기간 찾기 (N년 또는 종신)
     const 납입기간 = afterTokens.find(token => /^\d+년$|^종신$/.test(token)) || '-';
     
-    // 만기 찾기 (N세 또는 종신, 단 "년"이 없는 것)
+    // 만기 찾기 (N세 또는 종신)
     const 만기 = afterTokens.find(token => /^\d+세$|^종신$/.test(token)) || '-';
     
-    // 월보험료 찾기: 쉼표가 포함된 4자리 이상 숫자 (가장 마지막 것)
-    const premiumMatches = [...afterDate.matchAll(/([\d,]{4,})\s*원?/g)];
-    const 월보험료 = premiumMatches.length > 0 
-      ? sanitizeNumber(premiumMatches[premiumMatches.length - 1][1])
-      : 0;
+    // 월보험료 찾기: "원" 바로 앞의 숫자
+    let 월보험료 = 0;
+    const premiumMatch = afterDate.match(/([\d,]+)\s*원/);
+    if (premiumMatch) {
+      월보험료 = sanitizeNumber(premiumMatch[1]);
+      console.log(`  💰 월보험료: ${월보험료.toLocaleString()}원 (원본: ${premiumMatch[1]})`);
+    }
     
     // ============================================================================
     // 유효성 검증
@@ -616,6 +627,8 @@ function parseTerminatedContracts(text) {
       console.warn(`  ⚠️ ${번호}번 행: 회사명/상품명 없음, 스킵`);
       continue;
     }
+    
+    console.log(`  ✅ 최종: 번호=${번호}, 상태=${상태}, 회사명="${회사명}", 상품명="${상품명}", 월보험료=${월보험료.toLocaleString()}원`);
     
     contracts.push({
       번호,
