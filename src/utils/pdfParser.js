@@ -171,10 +171,10 @@ function parseAgentInfo(text) {
   const firstPageText = firstPageMatch ? firstPageMatch[1] : text;
   
   // 담당자명 추출 (다양한 패턴)
-  // 패턴 1: "담당 컨설턴트 홍길동" 또는 "담당자 홍길동"
+  // 패턴 1: "담당 컨설턴트 한인철" 또는 "담당자 한인철"
   let nameMatch = firstPageText.match(/담당\s*(?:컨설턴트|자|설계사)[\s:]*([가-힣]{2,4})/);
   
-  // 패턴 2: "컨설턴트: 홍길동" 또는 "설계사: 홍길동"
+  // 패턴 2: "컨설턴트: 한인철" 또는 "설계사: 한인철"
   if (!nameMatch) {
     nameMatch = firstPageText.match(/(?:컨설턴트|설계사)[\s:]+([가-힣]{2,4})/);
   }
@@ -184,8 +184,24 @@ function parseAgentInfo(text) {
     nameMatch = firstPageText.match(/([가-힣]{2,4})\s*\n\s*010[-\s]?\d{4}[-\s]?\d{4}/);
   }
   
+  // 패턴 4: "한인철" 같은 3글자 이름을 직접 추출 (지점, 본부 등 제외)
+  if (!nameMatch) {
+    const excludeWords = ['지점', '본부', '사업단', '팀장', '부장', '과장'];
+    const allNames = firstPageText.match(/[가-힣]{2,4}/g) || [];
+    for (const name of allNames) {
+      if (!excludeWords.includes(name) && name.length >= 2) {
+        nameMatch = [null, name];
+        break;
+      }
+    }
+  }
+  
   if (nameMatch) {
-    agentInfo.담당자명 = nameMatch[1].trim();
+    const extractedName = nameMatch[1].trim();
+    // "지점", "본부" 같은 단어 제외
+    if (!['지점', '본부', '사업단', '팀장', '부장', '과장'].includes(extractedName)) {
+      agentInfo.담당자명 = extractedName;
+    }
   }
   
   // 전화번호 추출 (010-XXXX-XXXX 형식)
@@ -520,7 +536,9 @@ function parseTerminatedContracts(text) {
     // ============================================================================
     // 날짜 이전: 회사명 + 상품명 추출
     // ============================================================================
-    const beforeTokens = beforeDate.split(' ').filter(Boolean);
+    // "해지*" 또는 "실효*" 접두사를 먼저 제거
+    const cleanedBeforeDate = beforeDate.replace(/^(해지|실효)\*?\s*/, '').trim();
+    const beforeTokens = cleanedBeforeDate.split(' ').filter(Boolean);
     
     let 회사명 = '';
     let 상품명 = '';
@@ -544,14 +562,19 @@ function parseTerminatedContracts(text) {
       if (companyFound) break;
     }
     
-    // 회사명을 찾지 못한 경우: 첫 토큰을 회사명으로, 나머지를 상품명으로
+    // 회사명을 찾지 못한 경우
     if (!companyFound && beforeTokens.length > 0) {
-      회사명 = beforeTokens[0];
-      상품명 = beforeTokens.slice(1).join(' ').trim();
+      // "無MG" 같은 패턴 확인
+      if (/^(無|무|\(무\))?[가-힣A-Z]+/.test(beforeTokens[0])) {
+        // 첫 토큰에서 "無" 제거 후 회사명으로 사용
+        회사명 = beforeTokens[0].replace(/^(無|무|\(무\))/, '').trim();
+        상품명 = beforeTokens.slice(1).join(' ').trim();
+      } else {
+        // 일반 경우: 첫 토큰을 회사명으로
+        회사명 = beforeTokens[0];
+        상품명 = beforeTokens.slice(1).join(' ').trim();
+      }
     }
-    
-    // 상품명에서 "해지*" 또는 "실효*" 접두사 제거
-    상품명 = 상품명.replace(/^(해지|실효)\*?\s*/, '').trim();
     
     // ============================================================================
     // 날짜 이후: 납입주기, 납입기간, 만기, 상태, 월보험료 추출
